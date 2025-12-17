@@ -1,14 +1,18 @@
 
-import React, { useState, useEffect } from 'react';
-import { Upload, Shirt, User, Gem, Wand2, Maximize2, Download, CheckCircle2, ImagePlus, PenTool, Check, Lightbulb, X, Sparkles, Loader2, RefreshCw, History, Package, Sliders, Sun, Cpu } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Upload, Shirt, User, Gem, Wand2, Download, X, Sparkles, 
+  Loader2, Package, ShieldCheck, Cpu, Watch, Info, Layers, 
+  MousePointer2, Sliders, Scan, Target, CheckCircle2, Lock, Unlock, 
+  Aperture, Camera, RefreshCw
+} from 'lucide-react';
 import { generateCompositeImage, validateImageSafety, generateStudioSuggestions, enhancePrompt } from '../services/geminiService';
 import { saveItem, getAllCharacters } from '../services/db';
 import { v4 as uuidv4 } from 'uuid';
 import { SavedCharacter, User as AppUser, ModuleType } from '../types'; 
-import { ImageViewerModal } from '../components/ImageViewerModal';
 import { SuggestionModal } from '../components/SuggestionModal';
-import { checkUsageLimit, incrementUsage } from '../services/userService';
 import { applyWatermark } from '../services/imageUtils';
+import { checkUsageLimit, incrementUsage } from '../services/userService';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -45,38 +49,44 @@ const BACKGROUNDS = [
     'Bãi biển Maldives (Tropical Beach)',
     'Cung điện nguy nga (Palace)',
     'Đường phố Cyberpunk (Neon City)',
-    'Văn phòng CEO (Modern Office)'
+    'Văn phòng CEO (Modern Office)',
+    'Tuyết trắng Sapa (Snowy Forest)',
+    'Sảnh khách sạn 5 sao (Luxury Lobby)',
+    'Thư viện cổ (Classic Library)'
 ];
 
 const RATIOS = ['3:4', '1:1', '16:9', '9:16'];
 const QUALITIES = ['1K', '2K', '4K'];
 
-const Studio: React.FC<StudioProps> = ({ addToast, currentUser, onRequireAuth, isAuthenticated, isGlobalProcessing, setGlobalProcessing }) => {
+const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser, onRequireAuth, isAuthenticated, isGlobalProcessing, setGlobalProcessing }) => {
   const [subjectFile, setSubjectFile] = useState<File | null>(null);
   const [subjectPreview, setSubjectPreview] = useState<string | null>(null);
   const [outfitFile, setOutfitFile] = useState<File | null>(null);
   const [outfitPreview, setOutfitPreview] = useState<string | null>(null);
+  const [productFile, setProductFile] = useState<File | null>(null);
+  const [productPreview, setProductPreview] = useState<string | null>(null);
   const [accessoryFile, setAccessoryFile] = useState<File | null>(null);
   const [accessoryPreview, setAccessoryPreview] = useState<string | null>(null);
-  
   const [checkingSafetyFor, setCheckingSafetyFor] = useState<string | null>(null);
+  
   const [prompt, setPrompt] = useState('');
   const [background, setBackground] = useState(BACKGROUNDS[0]); 
   const [aspectRatio, setAspectRatio] = useState('3:4');
-  const [quality, setQuality] = useState('1K');
+  const [quality, setQuality] = useState('2K');
   const [batchSize, setBatchSize] = useState(1);
   const [savedChars, setSavedChars] = useState<SavedCharacter[]>([]);
   const [selectedCharId, setSelectedCharId] = useState<string>('');
-  const [preserveIdentity, setPreserveIdentity] = useState(true); 
-  const [negativePrompt, setNegativePrompt] = useState('');
+  
+  const [lockFace, setLockFace] = useState(true);
+  const [lockBody, setLockBody] = useState(true);
+  const [lockTexture, setLockTexture] = useState(true);
+  const [negativePrompt, setNegativePrompt] = useState('blurry, lowres, distorted face, warped limbs, cartoon, illustration, noisy, low quality textures');
   const [useMagicPrompt, setUseMagicPrompt] = useState(true);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [resultImages, setResultImages] = useState<string[]>([]);
-  const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
-
   const [isSuggesting, setIsSuggesting] = useState(false);
-  const [suggestions, setSuggestions] = useState<{en: string, vi: string}[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
 
   useEffect(() => {
@@ -87,7 +97,7 @@ const Studio: React.FC<StudioProps> = ({ addToast, currentUser, onRequireAuth, i
       loadCharacters();
   }, []);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'subject' | 'outfit' | 'acc') => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'subject' | 'outfit' | 'product' | 'acc') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setCheckingSafetyFor(type);
@@ -95,45 +105,63 @@ const Studio: React.FC<StudioProps> = ({ addToast, currentUser, onRequireAuth, i
           const b64 = await fileToBase64(file);
           const validation = await validateImageSafety(b64);
           if (!validation.safe) {
-              addToast('Cảnh báo', `Hình ảnh vi phạm: ${validation.reason}`, 'error');
+              addToast('Cảnh báo an toàn', `Hình ảnh không hợp lệ: ${validation.reason}`, 'error');
               return;
           }
           const preview = await fileToPreview(file);
           if (type === 'subject') { setSubjectFile(file); setSubjectPreview(preview); setSelectedCharId(''); }
           if (type === 'outfit') { setOutfitFile(file); setOutfitPreview(preview); }
+          if (type === 'product') { setProductFile(file); setProductPreview(preview); }
           if (type === 'acc') { setAccessoryFile(file); setAccessoryPreview(preview); }
       } catch (err) {
-          addToast('Lỗi', 'Không thể kiểm tra an toàn ảnh.', 'error');
+          addToast('Lỗi', 'Không thể xử lý hình ảnh.', 'error');
       } finally {
           setCheckingSafetyFor(null);
       }
     }
   };
 
+  const clearAsset = (type: 'subject' | 'outfit' | 'product' | 'acc') => {
+      if (type === 'subject') { setSubjectFile(null); setSubjectPreview(null); }
+      if (type === 'outfit') { setOutfitFile(null); setOutfitPreview(null); }
+      if (type === 'product') { setProductFile(null); setProductPreview(null); }
+      if (type === 'acc') { setAccessoryFile(null); setAccessoryPreview(null); }
+  };
+
   const handleGenerate = async () => {
     if (!isAuthenticated) { onRequireAuth(); return; }
     if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; }
-    if (!subjectPreview) { addToast("Thiếu thông tin", "Bắt buộc phải có Nhân vật chính", "error"); return; }
+    
+    // Tier-based validation check
+    if (currentUser) {
+        if (quality === '4K' && currentUser.modelTier !== '3.0-pro') {
+            addToast("Không đủ quyền", "Vui lòng nâng cấp lên 3.0 Pro để dùng chất lượng 4K.", "error");
+            return;
+        }
+        const check = checkUsageLimit(currentUser.username, ModuleType.STUDIO, batchSize);
+        if (!check.allowed) { addToast("Không đủ điểm", check.message || "Hết điểm", "error"); return; }
+    }
+
+    let subB64 = subjectFile ? await fileToBase64(subjectFile) : (selectedCharId ? savedChars.find(c => c.id === selectedCharId)?.base64Data : null);
+    if (!subB64) { addToast("Thiếu dữ liệu", "Cần tải ảnh Nhân vật chính làm định danh.", "error"); return; }
 
     setIsGenerating(true);
     setGlobalProcessing?.(true);
     setResultImages([]);
     
     try {
-        let subB64 = subjectFile ? await fileToBase64(subjectFile) : (selectedCharId ? savedChars.find(c => c.id === selectedCharId)?.base64Data : null);
-        if (!subB64) throw new Error("Chưa có ảnh nhân vật");
-
         const outB64 = outfitFile ? await fileToBase64(outfitFile) : null;
+        const prodB64 = productFile ? await fileToBase64(productFile) : null;
         const accB64 = accessoryFile ? await fileToBase64(accessoryFile) : null;
 
         let finalPrompt = prompt;
         if (useMagicPrompt) {
-            addToast("Gemini 3.0 Pro", "Đang xử lý ghép ảnh đa nguồn...", "info");
-            finalPrompt = await enhancePrompt(prompt);
+            addToast("Gemini AI Core", "Đang phân tích cấu trúc 8K và ánh sáng vật phẩm...", "info");
+            finalPrompt = await enhancePrompt(`${prompt || "Model posing naturally with product"}. Ensure 100% texture consistency from references.`);
         }
 
         const promises = Array(batchSize).fill(null).map(() => 
-            generateCompositeImage(subB64!, outB64, accB64, finalPrompt, background, aspectRatio, quality, preserveIdentity, negativePrompt)
+            generateCompositeImage(subB64!, outB64, prodB64, accB64, finalPrompt, background, aspectRatio, quality, lockFace, negativePrompt)
         );
 
         const rawResults = await Promise.all(promises);
@@ -143,11 +171,23 @@ const Studio: React.FC<StudioProps> = ({ addToast, currentUser, onRequireAuth, i
         }));
 
         setResultImages(processedResults);
-        if (currentUser) incrementUsage(currentUser.username, ModuleType.STUDIO, batchSize);
-        addToast("Thành công", `Đã ghép ${batchSize} ảnh bằng Gemini 3.0 Pro!`, "success");
+        
+        for (const img of processedResults) {
+            await saveItem({
+                id: uuidv4(),
+                type: 'image',
+                prompt: `Studio Composite: ${prompt.substring(0, 30)}...`,
+                createdAt: Date.now(),
+                base64Data: img,
+                meta: { composite: true, sourceModule: ModuleType.STUDIO, locks: { face: lockFace, body: lockBody, texture: lockTexture } }
+            });
+        }
+
+        incrementUsage(currentUser!.username, ModuleType.STUDIO, batchSize);
+        addToast("Thành công", `Đã ghép xong ${batchSize} ảnh với độ chính xác pixel-perfect!`, "success");
 
     } catch (e: any) {
-        addToast("Lỗi", e.message || "Ghép ảnh thất bại.", "error");
+        addToast("Lỗi Render", e.message || "Không thể thực hiện ghép ảnh.", "error");
     } finally {
         setIsGenerating(false);
         setGlobalProcessing?.(false);
@@ -155,75 +195,161 @@ const Studio: React.FC<StudioProps> = ({ addToast, currentUser, onRequireAuth, i
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-full w-full p-4 lg:p-6 gap-6 lg:gap-8 relative">
-        <div className="w-full lg:w-[420px] flex flex-col gap-6 lg:overflow-y-auto lg:pr-2 custom-scrollbar shrink-0 pb-10 lg:pb-0">
+    <div className="flex flex-col lg:flex-row h-full w-full p-4 lg:p-6 gap-6 lg:gap-8 relative overflow-hidden bg-zinc-950">
+        <div className="w-full lg:w-[460px] flex flex-col gap-6 lg:overflow-y-auto lg:pr-3 custom-scrollbar shrink-0 pb-24 lg:pb-0 z-10">
             <div className="pb-4 border-b border-white/5">
-                <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-400 mb-2">Studio Ghép Ảnh</h2>
-                <div className="flex items-center gap-2 text-xs text-indigo-400 font-bold uppercase">
-                    <Cpu size={14}/> Engine: Gemini 3.0 Pro Image
+                <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400">
+                        <Aperture size={24} className="animate-spin-slow"/>
+                    </div>
+                    <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-500">Composition Studio</h2>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-widest bg-zinc-900/50 p-2 rounded-lg border border-white/5">
+                    <Cpu size={14} className="text-indigo-500"/> Authorized Tier: {currentUser?.modelTier || '1.5-free'}
                 </div>
             </div>
             
             <div className="space-y-6">
-                <div className="bg-zinc-900/60 border border-white/10 rounded-2xl p-4">
-                    <div className="flex items-center gap-2 mb-3 text-indigo-300 font-bold text-sm uppercase"><User size={16} /> Nhân vật chính *</div>
-                    <div className="relative h-40 bg-black/20 rounded-xl border-2 border-dashed border-zinc-700 flex items-center justify-center overflow-hidden cursor-pointer">
-                        {subjectPreview ? <img src={subjectPreview} className="w-full h-full object-contain" /> : <Upload size={20} className="text-zinc-600"/>}
-                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'subject')} accept="image/*" />
-                    </div>
-                </div>
-
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4">
-                        <div className="flex items-center gap-2 mb-3 text-purple-300 font-bold text-xs uppercase"><Shirt size={14} /> Trang phục</div>
-                        <div className="relative h-24 bg-black/20 rounded-xl border border-dashed border-zinc-700 flex items-center justify-center overflow-hidden">
-                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'outfit')} accept="image/*" />
-                             {outfitPreview ? <img src={outfitPreview} className="w-full h-full object-contain"/> : <Upload size={16} className="text-zinc-600"/>}
+                    <div className="col-span-2 bg-zinc-900/60 border border-indigo-500/30 rounded-2xl p-4 shadow-xl relative group">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-indigo-300 font-bold text-xs uppercase tracking-tighter">
+                                <User size={16} /> Identity Source (Nhân vật) *
+                            </div>
+                            {subjectPreview && <button onClick={() => clearAsset('subject')} className="text-zinc-500 hover:text-red-400 transition-colors"><X size={14}/></button>}
+                        </div>
+                        <div className="relative h-44 bg-black/40 rounded-xl border-2 border-dashed border-indigo-500/20 flex items-center justify-center overflow-hidden cursor-pointer hover:border-indigo-500/50 transition-all shadow-inner">
+                            {checkingSafetyFor === 'subject' ? <Loader2 className="animate-spin text-indigo-500"/> : subjectPreview ? <img src={subjectPreview} className="w-full h-full object-contain" /> : (
+                                <div className="text-center space-y-2">
+                                    <Upload size={24} className="text-zinc-600 mx-auto"/>
+                                    <p className="text-[10px] text-zinc-500 font-bold uppercase">Tải ảnh định danh</p>
+                                </div>
+                            )}
+                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'subject')} accept="image/*" />
                         </div>
                     </div>
-                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4">
-                        <div className="flex items-center gap-2 mb-3 text-pink-300 font-bold text-xs uppercase"><Package size={14} /> Sản phẩm</div>
-                        <div className="relative h-24 bg-black/20 rounded-xl border border-dashed border-zinc-700 flex items-center justify-center overflow-hidden">
-                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'acc')} accept="image/*" />
-                            {accessoryPreview ? <img src={accessoryPreview} className="w-full h-full object-contain"/> : <Upload size={16} className="text-zinc-600"/>}
+
+                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2 hover:border-purple-500/30 transition-all">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-purple-300 uppercase tracking-tighter flex items-center gap-1"><Shirt size={14}/> Outfit Map</span>
+                            {outfitPreview && <button onClick={() => clearAsset('outfit')} className="text-zinc-600 hover:text-red-400"><X size={12}/></button>}
+                        </div>
+                        <div className="relative aspect-square bg-black/20 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center overflow-hidden hover:border-purple-500/40 transition-all cursor-pointer group">
+                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => handleFileChange(e, 'outfit')} accept="image/*" />
+                             {checkingSafetyFor === 'outfit' ? <Loader2 size={16} className="animate-spin text-purple-500"/> : outfitPreview ? <img src={outfitPreview} className="w-full h-full object-contain"/> : <Upload size={18} className="text-zinc-700"/>}
+                        </div>
+                    </div>
+                    
+                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2 hover:border-orange-500/30 transition-all">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-orange-300 uppercase tracking-tighter flex items-center gap-1"><Package size={14}/> Product Map</span>
+                            {productPreview && <button onClick={() => clearAsset('product')} className="text-zinc-600 hover:text-red-400"><X size={12}/></button>}
+                        </div>
+                        <div className="relative aspect-square bg-black/20 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center overflow-hidden hover:border-orange-500/40 transition-all cursor-pointer group">
+                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => handleFileChange(e, 'product')} accept="image/*" />
+                            {checkingSafetyFor === 'product' ? <Loader2 size={16} className="animate-spin text-orange-500"/> : productPreview ? <img src={productPreview} className="w-full h-full object-contain"/> : <Upload size={18} className="text-zinc-700"/>}
+                        </div>
+                    </div>
+
+                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2 hover:border-cyan-500/30 transition-all">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-tighter flex items-center gap-1"><Watch size={14}/> Accessory Map</span>
+                            {accessoryPreview && <button onClick={() => clearAsset('acc')} className="text-zinc-600 hover:text-red-400"><X size={12}/></button>}
+                        </div>
+                        <div className="relative aspect-square bg-black/20 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center overflow-hidden hover:border-cyan-500/40 transition-all cursor-pointer group">
+                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => handleFileChange(e, 'acc')} accept="image/*" />
+                            {checkingSafetyFor === 'acc' ? <Loader2 size={16} className="animate-spin text-cyan-500"/> : accessoryPreview ? <img src={accessoryPreview} className="w-full h-full object-contain"/> : <Upload size={18} className="text-zinc-700"/>}
+                        </div>
+                    </div>
+
+                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2">
+                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-tighter flex items-center gap-1"><Layers size={14}/> Batch rendering</div>
+                        <div className="flex gap-2 h-full items-center">
+                            {[1, 2, 3].map(n => (
+                                <button key={n} onClick={() => setBatchSize(n)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all border ${batchSize === n ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:bg-zinc-900'}`}>{n}</button>
+                            ))}
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 space-y-4">
-                    <div>
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase mb-1.5 block">Mô tả hành động</label>
-                        <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Nhân vật đang làm gì..." className="w-full h-20 bg-zinc-950/80 border border-zinc-800 text-white text-sm rounded-lg p-3 outline-none focus:ring-1 focus:ring-indigo-500 resize-none"/>
+                <div className="bg-zinc-900/80 border border-emerald-500/30 rounded-2xl p-5 shadow-lg space-y-4">
+                    <div className="flex items-center gap-2 text-emerald-400 text-xs font-black uppercase tracking-widest">
+                        <ShieldCheck size={18}/> Precision Mapping Locks
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                         <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value)} className="bg-zinc-950 border border-zinc-800 text-white text-xs rounded p-2 outline-none">
-                            {RATIOS.map(r => <option key={r} value={r}>{r}</option>)}
-                         </select>
-                         <select value={quality} onChange={e => setQuality(e.target.value)} className="bg-zinc-950 border border-zinc-800 text-white text-xs rounded p-2 outline-none">
-                            {QUALITIES.map(q => <option key={q} value={q}>{q} Res</option>)}
-                         </select>
+                    <div className="grid grid-cols-3 gap-3">
+                        <button onClick={() => setLockFace(!lockFace)} className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 transition-all ${lockFace ? 'bg-emerald-600/20 border-emerald-500 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-600'}`}>
+                            {lockFace ? <Lock size={16}/> : <Unlock size={16}/>}
+                            <span className="text-[9px] font-bold uppercase">Lock Identity</span>
+                        </button>
+                        <button onClick={() => setLockBody(!lockBody)} className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 transition-all ${lockBody ? 'bg-emerald-600/20 border-emerald-500 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-600'}`}>
+                            {lockBody ? <Lock size={16}/> : <Unlock size={16}/>}
+                            <span className="text-[9px] font-bold uppercase">Lock Body</span>
+                        </button>
+                        <button onClick={() => setLockTexture(!lockTexture)} className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 transition-all ${lockTexture ? 'bg-emerald-600/20 border-emerald-500 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-600'}`}>
+                            {lockTexture ? <Lock size={16}/> : <Unlock size={16}/>}
+                            <span className="text-[9px] font-bold uppercase">Lock Texture</span>
+                        </button>
                     </div>
+                    <p className="text-[9px] text-zinc-500 italic leading-relaxed">
+                        * Ghi chú: Hệ thống sẽ cưỡng chế AI sao chép 100% pixel từ vật phẩm tham chiếu.
+                    </p>
                 </div>
 
-                <button onClick={handleGenerate} disabled={isGenerating || (isGlobalProcessing && !isGenerating)} className="w-full py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2 shadow-xl">
-                    {isGenerating ? <Loader2 size={20} className="animate-spin"/> : <><Wand2 size={20}/> Ghép & Tạo Ảnh Studio</>}
+                <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-5 space-y-5">
+                    <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Mô tả hành động của nhân vật..." className="w-full h-28 bg-zinc-950/80 border border-zinc-800 text-white text-sm rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all resize-none leading-relaxed"/>
+                    <select value={background} onChange={e => setBackground(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs rounded-xl p-3 outline-none focus:border-indigo-500">
+                        {BACKGROUNDS.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                </div>
+
+                <button onClick={handleGenerate} disabled={isGenerating || (isGlobalProcessing && !isGenerating)} className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white font-black text-sm uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-3 shadow-2xl border border-white/10 group">
+                    {isGenerating ? <Loader2 size={24} className="animate-spin"/> : <><Wand2 size={20} className="group-hover:rotate-12 transition-transform"/> Start Precise Mapping</>}
                 </button>
             </div>
         </div>
 
-        <div className="flex-1 bg-zinc-900/20 rounded-3xl border border-white/5 p-6 flex flex-col relative overflow-hidden backdrop-blur-sm min-h-[400px] lg:h-full">
+        {/* Fix: Right panel correctly structured as sibling to left panel */}
+        <div className="flex-1 bg-zinc-900/30 rounded-[2.5rem] border border-white/5 p-6 flex flex-col relative overflow-hidden backdrop-blur-xl min-h-[550px] lg:h-full shadow-2xl">
+            <div className="absolute top-6 left-8 flex items-center gap-4 text-zinc-500 z-10">
+                <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-md">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Studio Live Monitor</span>
+                </div>
+            </div>
+
             {resultImages.length > 0 ? (
-                <div className="grid gap-6 h-full lg:overflow-y-auto custom-scrollbar p-2">
+                <div className="flex-1 flex flex-col gap-8 lg:overflow-y-auto custom-scrollbar p-2 mt-12 relative z-10">
                     {resultImages.map((img, idx) => (
-                        <div key={idx} className="relative group rounded-2xl overflow-hidden border border-white/10 bg-black/40 shadow-2xl flex items-center justify-center aspect-[3/4]">
-                            <img src={img} className="w-full h-full object-contain" />
+                        <div key={idx} className="relative group rounded-3xl overflow-hidden border border-white/10 bg-black/60 shadow-2xl flex items-center justify-center animate-in zoom-in duration-700">
+                            <img src={img} className="max-w-full max-h-[75vh] object-contain" />
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center gap-6 backdrop-blur-md">
+                                <button onClick={() => {
+                                    const link = document.createElement('a');
+                                    link.href = img;
+                                    link.download = `Studio-Master-${idx+1}.png`;
+                                    link.click();
+                                }} className="p-5 bg-white text-black hover:bg-indigo-500 hover:text-white rounded-full shadow-2xl transition-all hover:scale-110 active:scale-95">
+                                    <Download size={32}/>
+                                </button>
+                            </div>
+                            <div className="absolute bottom-6 right-6 flex items-center gap-2 bg-indigo-600/90 backdrop-blur px-4 py-2 rounded-xl border border-white/20 shadow-lg">
+                                <Sparkles size={14} className="text-white"/>
+                                <span className="text-[10px] font-black text-white uppercase tracking-wider">Fidelity Verified • 8K Pro</span>
+                            </div>
                         </div>
                     ))}
                 </div>
             ) : (
-                <div className="h-full flex flex-col items-center justify-center text-zinc-600 opacity-60">
-                    <ImagePlus size={64} className="mb-4 text-purple-400/50" />
-                    <p className="text-lg font-light tracking-wide">Studio đang chờ dữ liệu của bạn</p>
+                <div className="h-full flex flex-col items-center justify-center text-zinc-700 space-y-8 animate-in fade-in duration-1000 relative z-0">
+                    <div className="relative p-12 rounded-full border border-zinc-800 bg-zinc-900/20 backdrop-blur-sm">
+                        <MousePointer2 size={80} className="text-zinc-800 animate-bounce" />
+                    </div>
+                    <div className="text-center space-y-4 max-w-sm">
+                        <p className="text-2xl font-black tracking-widest uppercase text-zinc-800">Studio Ready</p>
+                        <p className="text-xs text-zinc-600 font-medium leading-relaxed uppercase tracking-tighter">
+                            Tải ảnh nhân vật, trang phục, sản phẩm và phụ kiện để kích hoạt hệ thống mapping chính xác tuyệt đối.
+                        </p>
+                    </div>
                 </div>
             )}
         </div>

@@ -3,10 +3,10 @@ export interface VideoScene {
   sceneNumber: number;
   visualPrompt: string;
   voiceover: string;
-  character?: string; // The character speaking this line
+  character?: string; 
   generatedImage?: string;
   isGeneratingImage?: boolean;
-  locationTag?: string; // NEW: Tag for location consistency (e.g., "BEDROOM_1", "KITCHEN")
+  locationTag?: string; 
 }
 
 export interface VideoStrategy {
@@ -19,7 +19,7 @@ export interface ToastMessage {
   id: string;
   title: string;
   message: string;
-  type: 'success' | 'error' | 'info' | 'warning'; // Added warning support
+  type: 'success' | 'error' | 'info' | 'warning'; 
 }
 
 export interface GeneratedImage {
@@ -42,15 +42,15 @@ export interface StoryEpisode {
   title: string;
   summary: string;
   scenes?: VideoScene[];
-  seoData?: SEOData; // Added SEO Data
-  thumbnail?: string; // Existing thumbnail field
+  seoData?: SEOData; 
+  thumbnail?: string; 
 }
 
 export interface StorySettings {
     duration: number;
     durationUnit: 'sec' | 'min';
     aspectRatio: string;
-    voiceMap: Record<string, string>; // Maps Character Name -> Voice Name
+    voiceMap: Record<string, string>; 
     background: string;
     textMode: 'yes' | 'no' | 'custom';
 }
@@ -59,10 +59,8 @@ export interface StoryStructure {
   title: string;
   summary: string;
   episodes: StoryEpisode[];
-  settings?: StorySettings; // Persist settings here
+  settings?: StorySettings; 
 }
-
-// --- NEW TYPES ---
 
 export enum ModuleType {
   HOME = 'home',
@@ -74,10 +72,13 @@ export enum ModuleType {
   THUMBNAIL = 'thumbnail',
   CHARACTER_CREATOR = 'character_creator',
   STORY_CREATOR = 'story_creator',
-  CHANNEL_BUILDER = 'channel_builder', // NEW
+  CHANNEL_BUILDER = 'channel_builder',
   LIBRARY = 'library',
   ADMIN_PANEL = 'admin_panel'
 }
+
+// --- NEW MODEL TIER TYPES ---
+export type ModelTier = '1.5-free' | '2.5-verified' | '3.0-pro';
 
 export interface AppNotification {
   id: string;
@@ -91,6 +92,7 @@ export interface AppNotification {
 export interface SystemConfig {
     maintenanceMode: boolean;
     maintenanceEndTime: number;
+    defaultAdminModel?: ModelTier; // Thêm cấu hình model mặc định cho Admin
 }
 
 export interface RegisteredUser {
@@ -99,6 +101,7 @@ export interface RegisteredUser {
   password?: string;
   role: 'user' | 'admin';
   isVerified: boolean;
+  modelTier: ModelTier; // Cấp độ mô hình
   permissions: Record<string, boolean>;
   credits: number;
   createdAt: number;
@@ -106,12 +109,12 @@ export interface RegisteredUser {
   currentSessionId?: string;
   telegramChatId?: string;
   notifications?: AppNotification[];
-  systemConfig?: SystemConfig; // For admin
+  systemConfig?: SystemConfig; 
 }
 
 export interface User extends RegisteredUser {
   isAuthenticated: boolean;
-  sessionId?: string; // Mapped from currentSessionId for app state
+  sessionId?: string; 
 }
 
 export interface LibraryItem {
@@ -119,9 +122,9 @@ export interface LibraryItem {
   type: 'image' | 'video_strategy' | 'veo_video' | 'character' | 'story_character' | 'story' | 'poster' | 'thumbnail' | 'channel_plan';
   prompt: string;
   createdAt: number;
-  base64Data?: string; // For images
-  videoData?: string; // For videos (blob url or base64)
-  textContent?: string; // For scripts/stories (JSON string)
+  base64Data?: string; 
+  videoData?: string; 
+  textContent?: string; 
   meta?: any;
 }
 

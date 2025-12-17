@@ -342,7 +342,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, 
         if (telegramChatId && otpStep !== 'verified') { addToast("Chưa xác thực", "Vui lòng xác thực Telegram ID.", "error"); return; }
         setIsLoading(true);
         try {
-            const newUser: RegisteredUser = { username, email, password, role: 'user', isVerified: false, permissions: {}, credits: 10, createdAt: Date.now(), deviceId: '', telegramChatId: telegramChatId || undefined };
+            // Fix: Added missing modelTier property
+            const newUser: RegisteredUser = { username, email, password, role: 'user', isVerified: false, modelTier: '1.5-free', permissions: {}, credits: 10, createdAt: Date.now(), deviceId: '', telegramChatId: telegramChatId || undefined };
             const res = await registerUser(newUser);
             if (res.success && res.user) { onLoginSuccess(res.user); addToast("Thành công", "Đăng ký thành công!", "success"); onClose(); } 
             else { addToast("Lỗi", res.message, "error"); }
@@ -353,7 +354,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-[fadeIn_0.2s_ease-out]">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col">
                 <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white z-10" disabled={isLoading}><X size={20}/></button>
                 <div className="p-8 overflow-y-auto custom-scrollbar">
                     <div className="text-center mb-6"><h2 className="text-2xl font-black text-white mb-2">UltraEdit 8K</h2><p className="text-sm text-zinc-400">{mode === 'login' ? 'Đăng nhập bảo mật' : mode === 'register' ? 'Tạo tài khoản mới' : 'Khôi phục tài khoản'}</p></div>
@@ -399,12 +400,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, 
 
 const App: React.FC = () => {
   const [activeModule, setActiveModule] = useState<ModuleType>(ModuleType.HOME);
+  // Fix: Added missing modelTier initial property
   const [user, setUser] = useState<User>({ 
       username: 'Guest', 
       email: '',
       role: 'user', 
       isAuthenticated: false,
       isVerified: false,
+      modelTier: '1.5-free',
       permissions: {},
       credits: 0,
       createdAt: 0
@@ -554,12 +557,14 @@ const App: React.FC = () => {
   }
 
   const handleLoginSuccess = (registeredUser: RegisteredUser) => {
+      // Fix: Added missing modelTier property assignment from registeredUser
       const appUser: User = {
           username: registeredUser.username,
           email: registeredUser.email,
           role: registeredUser.role,
           isAuthenticated: true,
           isVerified: registeredUser.isVerified,
+          modelTier: registeredUser.modelTier,
           permissions: registeredUser.permissions,
           credits: registeredUser.credits,
           sessionId: registeredUser.currentSessionId, // Store current session
@@ -572,12 +577,14 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+      // Fix: Added missing modelTier property to guest user
       setUser({ 
           username: 'Guest', 
           email: '',
           role: 'user', 
           isAuthenticated: false,
           isVerified: false,
+          modelTier: '1.5-free',
           permissions: {},
           credits: 0,
           createdAt: 0
