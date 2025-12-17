@@ -43,11 +43,11 @@ const getModelNames = (tier: ModelTier) => {
 };
 
 const validateTierAccess = (tier: ModelTier, quality: string) => {
-    const qValue = parseInt(quality); // 1, 2, 4, 8
-    if (tier === '1.5-free' && qValue > 1) {
-        throw new Error("Tài khoản Free chỉ hỗ trợ 1K. Vui lòng nâng cấp để dùng chất lượng cao hơn.");
+    const qNum = parseInt(quality); 
+    if (tier === '1.5-free' && qNum > 1) {
+        throw new Error("Tài khoản Free chỉ hỗ trợ 1K. Vui lòng nâng cấp để dùng 2K/4K/8K.");
     }
-    if (tier === '2.5-verified' && qValue > 4) {
+    if (tier === '2.5-verified' && qNum > 4) {
         throw new Error("Tài khoản Verified hỗ trợ tối đa 4K. Vui lòng nâng cấp lên Pro để dùng 8K.");
     }
 };
@@ -79,23 +79,47 @@ export const generateCompositeImage = async (
     const models = getModelNames(tier);
     const ai = getAi();
 
-    const parts: any[] = [
-        { inlineData: { mimeType: 'image/png', data: subjectB64 } }
-    ];
+    const parts: any[] = [];
 
-    let systemDirective = `**STRICT PIXEL-PERFECT COMPOSITE MISSION**\n`;
-    systemDirective += `TASK: You MUST merge elements with 100% fidelity. NO hallucinations.\n`;
+    // Labeling rõ ràng cho từng Image Part
+    parts.push({ text: "REFERENCE 1 (HUMAN IDENTITY): This person is the main character." });
+    parts.push({ inlineData: { mimeType: 'image/png', data: subjectB64 } });
 
-    if (outfitB64) parts.push({ inlineData: { mimeType: 'image/png', data: outfitB64 } });
-    if (productB64) parts.push({ inlineData: { mimeType: 'image/png', data: productB64 } });
-    if (accessoryB64) parts.push({ inlineData: { mimeType: 'image/png', data: accessoryB64 } });
+    if (productB64) {
+        parts.push({ text: "REFERENCE 2 (PRODUCT): The person MUST be holding or touching this specific object naturally." });
+        parts.push({ inlineData: { mimeType: 'image/png', data: productB64 } });
+    }
 
-    systemDirective += `\n**EXECUTION:** ${prompt}. Background: ${background}. Resolution: ${quality}. ${negativePrompt ? 'Negative: ' + negativePrompt : ''}`;
-    parts.push({ text: systemDirective });
+    if (outfitB64) {
+        parts.push({ text: "REFERENCE 3 (OUTFIT): The person must wear this clothing style." });
+        parts.push({ inlineData: { mimeType: 'image/png', data: outfitB64 } });
+    }
 
+    if (accessoryB64) {
+        parts.push({ text: "REFERENCE 4 (ACCESSORY): Add this item to the scene." });
+        parts.push({ inlineData: { mimeType: 'image/png', data: accessoryB64 } });
+    }
+
+    // Directives
+    const finalDirective = `
+        TASK: Composite all references.
+        SCENE: ${prompt || "Professional commercial photography"}.
+        ENVIRONMENT: ${background}.
+        QUALITY: ${quality === '8K' ? 'Ultra-HD 8K resolution, incredible detail' : quality}.
+        STRICT: Do not change the person's face. Do not change the product's branding/labels. 
+        Negative: ${negativePrompt || "blurry, distorted, extra fingers, low quality"}.
+    `;
+    parts.push({ text: finalDirective });
+
+    // Cấu hình ImageConfig chuẩn hóa
     const imageConfig: any = { aspectRatio };
-    if (models.image === 'gemini-3-pro-image-preview') {
-        imageConfig.imageSize = quality as any;
+    
+    // CRITICAL FIX: Chỉ gửi imageSize nếu là model Pro (Pro Image Preview)
+    if (models.image.includes('pro-image')) {
+        // Map quality string to valid API enum: "1K", "2K", "4K"
+        if (quality === '8K' || quality === '4K') imageConfig.imageSize = "4K";
+        else if (quality === '2K') imageConfig.imageSize = "2K";
+        else imageConfig.imageSize = "1K";
     }
 
     const response = await ai.models.generateContent({
@@ -107,7 +131,7 @@ export const generateCompositeImage = async (
     for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) return part.inlineData.data;
     }
-    throw new Error("Render failed: No output.");
+    throw new Error("Render failed: No image data in response.");
 };
 
 export const generateImage = async (
@@ -118,29 +142,19 @@ export const generateImage = async (
     negativePrompt?: string,
     engine: ImageEngine = 'imagen'
 ): Promise<string> => {
-    const ai = getAi();
     const tier = getCurrentUserTier();
     validateTierAccess(tier, quality);
     const models = getModelNames(tier);
+    const ai = getAi();
 
-    if (tier === '1.5-free') {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: { parts: [{ text: prompt }] },
-            config: { imageConfig: { aspectRatio: aspectRatio as any } }
-        });
-        for (const part of response.candidates[0].content.parts) {
-            if (part.inlineData) return part.inlineData.data;
-        }
-        throw new Error("No image generated");
-    }
-
-    const parts: any[] = [{ text: prompt }];
+    const parts: any[] = [{ text: `${prompt}. Resolution: ${quality}. ${negativePrompt ? 'Negative: ' + negativePrompt : ''}` }];
     if (refImageB64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageB64 } });
 
     const imageConfig: any = { aspectRatio };
-    if (models.image === 'gemini-3-pro-image-preview') {
-        imageConfig.imageSize = quality as any;
+    if (models.image.includes('pro-image')) {
+        if (quality === '8K' || quality === '4K') imageConfig.imageSize = "4K";
+        else if (quality === '2K') imageConfig.imageSize = "2K";
+        else imageConfig.imageSize = "1K";
     }
 
     const response = await ai.models.generateContent({
@@ -220,18 +234,21 @@ export const editImageWithGemini = async (base64Image: string, prompt: string): 
 export const generateThumbnail = async (base64Image: string, layout: string, aspectRatio: string, quality: string, lang: string, context: string): Promise<string> => {
     const tier = getCurrentUserTier();
     const models = getModelNames(tier);
+    const ai = getAi();
     
     const imageConfig: any = { aspectRatio };
-    if (models.image === 'gemini-3-pro-image-preview') {
-        imageConfig.imageSize = quality as any;
+    if (models.image.includes('pro-image')) {
+        if (quality === '8K' || quality === '4K') imageConfig.imageSize = "4K";
+        else if (quality === '2K') imageConfig.imageSize = "2K";
+        else imageConfig.imageSize = "1K";
     }
 
-    const response = await getAi().models.generateContent({
+    const response = await ai.models.generateContent({
         model: models.image,
         contents: {
             parts: [
                 { inlineData: { mimeType: 'image/png', data: base64Image } },
-                { text: `Create a professional viral thumbnail. Layout: ${layout}. Language: ${lang}. Context: ${context}` }
+                { text: `Create a professional viral thumbnail. Layout: ${layout}. Language: ${lang}. Context: ${context}. Resolution: ${quality}` }
             ]
         },
         config: { imageConfig }
@@ -259,17 +276,20 @@ export const generateThumbnailSuggestions = async (base64Image: string | null, p
 export const generatePoster = async (modelB64: string | null, productB64: string | null, logoB64: string | null, headline: string, finalPrompt: string, template: string, quality: string, negativePrompt: string): Promise<string> => {
     const tier = getCurrentUserTier();
     const models = getModelNames(tier);
-    const parts: any[] = [{ text: `Create an advertising poster. Headline: "${headline}". Template: ${template}. Prompt: ${finalPrompt}. Negative: ${negativePrompt}` }];
+    const ai = getAi();
+    const parts: any[] = [{ text: `Create an advertising poster. Headline: "${headline}". Template: ${template}. Prompt: ${finalPrompt}. Negative: ${negativePrompt}. Resolution: ${quality}` }];
     if (modelB64) parts.push({ inlineData: { mimeType: 'image/png', data: modelB64 } });
     if (productB64) parts.push({ inlineData: { mimeType: 'image/png', data: productB64 } });
     if (logoB64) parts.push({ inlineData: { mimeType: 'image/png', data: logoB64 } });
 
     const imageConfig: any = { aspectRatio: '3:4' };
-    if (models.image === 'gemini-3-pro-image-preview') {
-        imageConfig.imageSize = quality as any;
+    if (models.image.includes('pro-image')) {
+        if (quality === '8K' || quality === '4K') imageConfig.imageSize = "4K";
+        else if (quality === '2K') imageConfig.imageSize = "2K";
+        else imageConfig.imageSize = "1K";
     }
 
-    const response = await getAi().models.generateContent({
+    const response = await ai.models.generateContent({
         model: models.image,
         contents: { parts },
         config: { imageConfig }
@@ -436,17 +456,20 @@ export const generateVeoSceneImage = async (
 ): Promise<string> => {
     const tier = getCurrentUserTier();
     const models = getModelNames(tier);
-    const parts: any[] = [{ text: prompt }];
+    const ai = getAi();
+    const parts: any[] = [{ text: `${prompt}. Resolution: ${quality}` }];
     if (charImage) parts.push({ inlineData: { mimeType: 'image/png', data: charImage } });
     if (prodImage) parts.push({ inlineData: { mimeType: 'image/png', data: prodImage } });
     if (prevImageB64) parts.push({ inlineData: { mimeType: 'image/png', data: prevImageB64 } });
     
     const imageConfig: any = { aspectRatio };
-    if (models.image === 'gemini-3-pro-image-preview') {
-        imageConfig.imageSize = quality as any;
+    if (models.image.includes('pro-image')) {
+        if (quality === '8K' || quality === '4K') imageConfig.imageSize = "4K";
+        else if (quality === '2K') imageConfig.imageSize = "2K";
+        else imageConfig.imageSize = "1K";
     }
 
-    const response = await getAi().models.generateContent({
+    const response = await ai.models.generateContent({
         model: models.image,
         contents: { parts },
         config: { imageConfig }
@@ -514,13 +537,19 @@ export const generateDiverseStoryIdeas = async (chars: any[], mood: string, cont
 export const generateStoryThumbnail = async (storyTitle: string, epNum: number, epTitle: string, epSum: string, layout: string, lang: string, aspectRatio: string, hook: string, style: string, refImage?: string): Promise<string> => {
     const tier = getCurrentUserTier();
     const models = getModelNames(tier);
+    const ai = getAi();
     const parts: any[] = [{ text: `Create a story thumbnail for Episode ${epNum}. Story: ${storyTitle}. Style: ${style}.` }];
     if (refImage) parts.push({ inlineData: { mimeType: 'image/png', data: refImage } });
     
-    const response = await getAi().models.generateContent({
+    const imageConfig: any = { aspectRatio };
+    if (models.image.includes('pro-image')) {
+        imageConfig.imageSize = "4K";
+    }
+
+    const response = await ai.models.generateContent({
         model: models.image,
         contents: { parts },
-        config: { imageConfig: { aspectRatio } }
+        config: { imageConfig }
     });
     for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) return part.inlineData.data;

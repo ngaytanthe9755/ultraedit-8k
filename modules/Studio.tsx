@@ -84,6 +84,7 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
   const [useMagicPrompt, setUseMagicPrompt] = useState(true);
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [renderStep, setRenderStep] = useState('');
   const [resultImages, setResultImages] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -151,15 +152,19 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
 
         let finalPrompt = prompt;
         if (useMagicPrompt) {
-            addToast("Gemini AI Core", "Đang phân tích cấu trúc 8K và ánh sáng vật phẩm...", "info");
-            finalPrompt = await enhancePrompt(`${prompt || "Model posing naturally with product"}. Ensure 100% texture consistency from references.`);
+            setRenderStep("Phân tích cấu trúc pixel & ánh sáng vật thể...");
+            finalPrompt = await enhancePrompt(`${prompt || "Commercial fashion photography, model interacting with product"}. Ensure 100% texture consistency.`);
         }
 
+        setRenderStep("Đang tổng hợp các tham chiếu hình ảnh (Composite Phase)...");
+        
         const promises = Array(batchSize).fill(null).map(() => 
             generateCompositeImage(subB64!, outB64, prodB64, accB64, finalPrompt, background, aspectRatio, quality, lockFace, negativePrompt)
         );
 
         const rawResults = await Promise.all(promises);
+        
+        setRenderStep("Hoàn thiện xử lý hậu kỳ (Post-processing)...");
         const processedResults = await Promise.all(rawResults.map(async (raw) => {
             if (currentUser && !currentUser.isVerified) return await applyWatermark(raw);
             return `data:image/png;base64,${raw}`;
@@ -174,30 +179,32 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                 prompt: `Studio Composite: ${prompt.substring(0, 30)}...`,
                 createdAt: Date.now(),
                 base64Data: img,
-                meta: { composite: true, sourceModule: ModuleType.STUDIO, locks: { face: lockFace, body: lockBody, texture: lockTexture } }
+                meta: { composite: true, sourceModule: ModuleType.STUDIO, quality, aspectRatio }
             });
         }
 
         incrementUsage(currentUser!.username, ModuleType.STUDIO, batchSize);
-        addToast("Thành công", `Đã ghép xong ${batchSize} ảnh với độ chính xác pixel-perfect!`, "success");
+        addToast("Thành công", `Đã ghép xong ${batchSize} ảnh với độ chính xác cao!`, "success");
 
     } catch (e: any) {
         addToast("Lỗi Render", e.message || "Không thể thực hiện ghép ảnh.", "error");
     } finally {
         setIsGenerating(false);
+        setRenderStep('');
         setGlobalProcessing?.(false);
     }
   };
 
   return (
     <div className="flex flex-col lg:flex-row h-full w-full p-4 lg:p-6 gap-6 lg:gap-8 relative overflow-hidden bg-zinc-950">
+        {/* Sidebar Controls */}
         <div className="w-full lg:w-[460px] flex flex-col gap-6 lg:overflow-y-auto lg:pr-3 custom-scrollbar shrink-0 pb-24 lg:pb-0 z-10">
             <div className="pb-4 border-b border-white/5">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400">
                         <Aperture size={24} className="animate-spin-slow"/>
                     </div>
-                    <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-500">Composition Studio</h2>
+                    <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-500 tracking-tight">Composition Studio</h2>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-widest bg-zinc-900/50 p-2 rounded-lg border border-white/5">
                     <Cpu size={14} className="text-indigo-500"/> Authorized Tier: {currentUser?.modelTier || '1.5-free'}
@@ -205,11 +212,12 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
             </div>
             
             <div className="space-y-6">
+                {/* Visual Assets Mapping */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2 bg-zinc-900/60 border border-indigo-500/30 rounded-2xl p-4 shadow-xl relative group">
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2 text-indigo-300 font-bold text-xs uppercase tracking-tighter">
-                                <User size={16} /> Identity Source (Nhân vật) *
+                                <User size={16} /> Identity Source (Nhân vật chính) *
                             </div>
                             {subjectPreview && <button onClick={() => clearAsset('subject')} className="text-zinc-500 hover:text-red-400 transition-colors"><X size={14}/></button>}
                         </div>
@@ -224,20 +232,9 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                         </div>
                     </div>
 
-                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2 hover:border-purple-500/30 transition-all">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-purple-300 uppercase tracking-tighter flex items-center gap-1"><Shirt size={14}/> Outfit Map</span>
-                            {outfitPreview && <button onClick={() => clearAsset('outfit')} className="text-zinc-600 hover:text-red-400"><X size={12}/></button>}
-                        </div>
-                        <div className="relative aspect-square bg-black/20 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center overflow-hidden hover:border-purple-500/40 transition-all cursor-pointer group">
-                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => handleFileChange(e, 'outfit')} accept="image/*" />
-                             {checkingSafetyFor === 'outfit' ? <Loader2 size={16} className="animate-spin text-purple-500"/> : outfitPreview ? <img src={outfitPreview} className="w-full h-full object-contain"/> : <Upload size={18} className="text-zinc-700"/>}
-                        </div>
-                    </div>
-                    
                     <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2 hover:border-orange-500/30 transition-all">
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-orange-300 uppercase tracking-tighter flex items-center gap-1"><Package size={14}/> Product Map</span>
+                            <span className="text-[10px] font-bold text-orange-300 uppercase tracking-tighter flex items-center gap-1"><Package size={14}/> Product Map (Sản phẩm)</span>
                             {productPreview && <button onClick={() => clearAsset('product')} className="text-zinc-600 hover:text-red-400"><X size={12}/></button>}
                         </div>
                         <div className="relative aspect-square bg-black/20 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center overflow-hidden hover:border-orange-500/40 transition-all cursor-pointer group">
@@ -246,14 +243,14 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                         </div>
                     </div>
 
-                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2 hover:border-cyan-500/30 transition-all">
+                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2 hover:border-purple-500/30 transition-all">
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-tighter flex items-center gap-1"><Watch size={14}/> Accessory Map</span>
-                            {accessoryPreview && <button onClick={() => clearAsset('acc')} className="text-zinc-600 hover:text-red-400"><X size={12}/></button>}
+                            <span className="text-[10px] font-bold text-purple-300 uppercase tracking-tighter flex items-center gap-1"><Shirt size={14}/> Outfit / Style</span>
+                            {outfitPreview && <button onClick={() => clearAsset('outfit')} className="text-zinc-600 hover:text-red-400"><X size={12}/></button>}
                         </div>
-                        <div className="relative aspect-square bg-black/20 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center overflow-hidden hover:border-cyan-500/40 transition-all cursor-pointer group">
-                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => handleFileChange(e, 'acc')} accept="image/*" />
-                            {checkingSafetyFor === 'acc' ? <Loader2 size={16} className="animate-spin text-cyan-500"/> : accessoryPreview ? <img src={accessoryPreview} className="w-full h-full object-contain"/> : <Upload size={18} className="text-zinc-700"/>}
+                        <div className="relative aspect-square bg-black/20 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center overflow-hidden hover:border-purple-500/40 transition-all cursor-pointer group">
+                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={(e) => handleFileChange(e, 'outfit')} accept="image/*" />
+                             {checkingSafetyFor === 'outfit' ? <Loader2 size={16} className="animate-spin text-purple-500"/> : outfitPreview ? <img src={outfitPreview} className="w-full h-full object-contain"/> : <Upload size={18} className="text-zinc-700"/>}
                         </div>
                     </div>
 
@@ -293,24 +290,31 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                         </button>
                     </div>
                     <p className="text-[9px] text-zinc-500 italic leading-relaxed">
-                        * Ghi chú: Hệ thống sẽ cưỡng chế AI sao chép 100% pixel từ vật phẩm tham chiếu.
+                        * Ghi chú: Hệ thống sẽ cưỡng chế AI sao chép 100% đặc điểm từ ảnh tham chiếu. Thích hợp để ghép người cầm sản phẩm cụ thể.
                     </p>
                 </div>
 
                 <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-5 space-y-5">
-                    <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Mô tả hành động của nhân vật..." className="w-full h-28 bg-zinc-950/80 border border-zinc-800 text-white text-sm rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all resize-none leading-relaxed"/>
+                    <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Mô tả hành động (VD: Nhân vật đang cầm túi xách mỉm cười)..." className="w-full h-28 bg-zinc-950/80 border border-zinc-800 text-white text-sm rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all resize-none leading-relaxed"/>
                     <select value={background} onChange={e => setBackground(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs rounded-xl p-3 outline-none focus:border-indigo-500">
                         {BACKGROUNDS.map(b => <option key={b} value={b}>{b}</option>)}
                     </select>
                 </div>
 
-                <button onClick={handleGenerate} disabled={isGenerating || (isGlobalProcessing && !isGenerating)} className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white font-black text-sm uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-3 shadow-2xl border border-white/10 group">
-                    {isGenerating ? <Loader2 size={24} className="animate-spin"/> : <><Wand2 size={20} className="group-hover:rotate-12 transition-transform"/> Start Precise Mapping</>}
+                <button onClick={handleGenerate} disabled={isGenerating || (isGlobalProcessing && !isGenerating)} className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white font-black text-sm uppercase tracking-widest disabled:opacity-50 flex flex-col items-center justify-center gap-1 shadow-2xl border border-white/10 group transition-all">
+                    {isGenerating ? (
+                        <>
+                            <Loader2 size={24} className="animate-spin mb-1"/>
+                            <span className="text-[10px] animate-pulse">{renderStep}</span>
+                        </>
+                    ) : (
+                        <span className="flex items-center gap-3"><Wand2 size={20} className="group-hover:rotate-12 transition-transform"/> Start Precise Mapping</span>
+                    )}
                 </button>
             </div>
-            {/* Added: Correctly close the left sidebar div */}
         </div>
 
+        {/* Preview Panel */}
         <div className="flex-1 bg-zinc-900/30 rounded-[2.5rem] border border-white/5 p-6 flex flex-col relative overflow-hidden backdrop-blur-xl min-h-[550px] lg:h-full shadow-2xl">
             <div className="absolute top-6 left-8 flex items-center gap-4 text-zinc-500 z-10">
                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-md">
@@ -336,7 +340,7 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                             </div>
                             <div className="absolute bottom-6 right-6 flex items-center gap-2 bg-indigo-600/90 backdrop-blur px-4 py-2 rounded-xl border border-white/20 shadow-lg">
                                 <Sparkles size={14} className="text-white"/>
-                                <span className="text-[10px] font-black text-white uppercase tracking-wider">Fidelity Verified • {quality} Pro</span>
+                                <span className="text-[10px] font-black text-white uppercase tracking-wider">Fidelity Verified • {quality} Ultra</span>
                             </div>
                         </div>
                     ))}
@@ -349,14 +353,13 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                     <div className="text-center space-y-4 max-w-sm">
                         <p className="text-2xl font-black tracking-widest uppercase text-zinc-800">Studio Ready</p>
                         <p className="text-xs text-zinc-600 font-medium leading-relaxed uppercase tracking-tighter">
-                            Tải ảnh nhân vật, trang phục, sản phẩm và phụ kiện để kích hoạt hệ thống mapping chính xác tuyệt đối.
+                            Tải ảnh nhân vật và sản phẩm tham chiếu để bắt đầu quá trình ghép ảnh chính xác cao. Đảm bảo độ phân giải 8K cho tài khoản Pro.
                         </p>
                     </div>
                 </div>
             )}
         </div>
         
-        {/* Added: SuggestionModal to allow using suggestions if they are generated */}
         <SuggestionModal 
             isOpen={showSuggestionsModal} 
             onClose={() => setShowSuggestionsModal(false)} 
