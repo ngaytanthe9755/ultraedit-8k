@@ -1,0 +1,16 @@
+{
+  "name": "Gemini UltraEdit 8K",
+  "short_name": "UltraEdit",
+  "description": "AI Creative Studio powered by Gemini",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "./vite.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ]
+}
