@@ -4,7 +4,7 @@ import {
   Upload, Shirt, User, Gem, Wand2, Download, X, Sparkles, 
   Loader2, Package, ShieldCheck, Cpu, Watch, Info, Layers, 
   MousePointer2, Sliders, Scan, Target, CheckCircle2, Lock, Unlock, 
-  Aperture, Camera, RefreshCw
+  Aperture, Camera, RefreshCw, Monitor
 } from 'lucide-react';
 import { generateCompositeImage, validateImageSafety, generateStudioSuggestions, enhancePrompt } from '../services/geminiService';
 import { saveItem, getAllCharacters } from '../services/db';
@@ -56,7 +56,7 @@ const BACKGROUNDS = [
 ];
 
 const RATIOS = ['3:4', '1:1', '16:9', '9:16'];
-const QUALITIES = ['1K', '2K', '4K'];
+const QUALITIES = ['1K', '2K', '4K', '8K'];
 
 const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser, onRequireAuth, isAuthenticated, isGlobalProcessing, setGlobalProcessing }) => {
   const [subjectFile, setSubjectFile] = useState<File | null>(null);
@@ -132,12 +132,7 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
     if (!isAuthenticated) { onRequireAuth(); return; }
     if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; }
     
-    // Tier-based validation check
     if (currentUser) {
-        if (quality === '4K' && currentUser.modelTier !== '3.0-pro') {
-            addToast("Không đủ quyền", "Vui lòng nâng cấp lên 3.0 Pro để dùng chất lượng 4K.", "error");
-            return;
-        }
         const check = checkUsageLimit(currentUser.username, ModuleType.STUDIO, batchSize);
         if (!check.allowed) { addToast("Không đủ điểm", check.message || "Hết điểm", "error"); return; }
     }
@@ -263,6 +258,13 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                     </div>
 
                     <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2">
+                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-tighter flex items-center gap-1"><Monitor size={14}/> Render Quality</div>
+                        <select value={quality} onChange={e => setQuality(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 text-white text-[10px] font-bold rounded-lg p-2 outline-none focus:border-indigo-500 transition-colors">
+                            {QUALITIES.map(q => <option key={q} value={q}>{q} UHD</option>)}
+                        </select>
+                    </div>
+
+                    <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-2">
                         <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-tighter flex items-center gap-1"><Layers size={14}/> Batch rendering</div>
                         <div className="flex gap-2 h-full items-center">
                             {[1, 2, 3].map(n => (
@@ -306,9 +308,9 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                     {isGenerating ? <Loader2 size={24} className="animate-spin"/> : <><Wand2 size={20} className="group-hover:rotate-12 transition-transform"/> Start Precise Mapping</>}
                 </button>
             </div>
+            {/* Added: Correctly close the left sidebar div */}
         </div>
 
-        {/* Fix: Right panel correctly structured as sibling to left panel */}
         <div className="flex-1 bg-zinc-900/30 rounded-[2.5rem] border border-white/5 p-6 flex flex-col relative overflow-hidden backdrop-blur-xl min-h-[550px] lg:h-full shadow-2xl">
             <div className="absolute top-6 left-8 flex items-center gap-4 text-zinc-500 z-10">
                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-md">
@@ -334,7 +336,7 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                             </div>
                             <div className="absolute bottom-6 right-6 flex items-center gap-2 bg-indigo-600/90 backdrop-blur px-4 py-2 rounded-xl border border-white/20 shadow-lg">
                                 <Sparkles size={14} className="text-white"/>
-                                <span className="text-[10px] font-black text-white uppercase tracking-wider">Fidelity Verified • 8K Pro</span>
+                                <span className="text-[10px] font-black text-white uppercase tracking-wider">Fidelity Verified • {quality} Pro</span>
                             </div>
                         </div>
                     ))}
@@ -353,6 +355,19 @@ const Studio: React.FC<StudioProps> = ({ addToast, addNotification, currentUser,
                 </div>
             )}
         </div>
+        
+        {/* Added: SuggestionModal to allow using suggestions if they are generated */}
+        <SuggestionModal 
+            isOpen={showSuggestionsModal} 
+            onClose={() => setShowSuggestionsModal(false)} 
+            title="Gợi ý Studio Concept" 
+            suggestions={suggestions} 
+            onSelect={(item) => { 
+                setPrompt(item.en); 
+                setShowSuggestionsModal(false); 
+            }} 
+            isLoading={isSuggesting}
+        />
     </div>
   );
 };

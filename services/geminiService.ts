@@ -28,7 +28,7 @@ const getModelNames = (tier: ModelTier) => {
             };
         case '2.5-verified':
             return {
-                text: 'gemini-flash-latest', 
+                text: 'gemini-3-flash-preview', 
                 image: 'gemini-3-pro-image-preview', 
                 video: 'veo-3.1-fast-generate-preview'
             };
@@ -42,13 +42,13 @@ const getModelNames = (tier: ModelTier) => {
     }
 };
 
-// Check if current user has permission to use a specific quality or engine
-const validateTierAccess = (tier: ModelTier, quality: string, engine?: string) => {
-    if (quality === '4K' && tier !== '3.0-pro') {
-        throw new Error("Tài khoản chưa được cấp quyền 4K. Vui lòng nâng cấp lên 3.0 Pro.");
+const validateTierAccess = (tier: ModelTier, quality: string) => {
+    const qValue = parseInt(quality); // 1, 2, 4, 8
+    if (tier === '1.5-free' && qValue > 1) {
+        throw new Error("Tài khoản Free chỉ hỗ trợ 1K. Vui lòng nâng cấp để dùng chất lượng cao hơn.");
     }
-    if (quality === '2K' && tier === '1.5-free') {
-        throw new Error("Tài khoản miễn phí chỉ hỗ trợ 1K. Vui lòng xác minh để dùng 2K.");
+    if (tier === '2.5-verified' && qValue > 4) {
+        throw new Error("Tài khoản Verified hỗ trợ tối đa 4K. Vui lòng nâng cấp lên Pro để dùng 8K.");
     }
 };
 
@@ -75,10 +75,7 @@ export const generateCompositeImage = async (
     negativePrompt: string
 ): Promise<string> => {
     const tier = getCurrentUserTier();
-    
-    // Strict Tier Lock
     validateTierAccess(tier, quality);
-
     const models = getModelNames(tier);
     const ai = getAi();
 
@@ -87,46 +84,30 @@ export const generateCompositeImage = async (
     ];
 
     let systemDirective = `**STRICT PIXEL-PERFECT COMPOSITE MISSION**\n`;
-    systemDirective += `TASK: You MUST merge the following elements with 100% fidelity. NO hallucinations allowed.\n\n`;
-    systemDirective += `1. **IDENTITY (IMAGE 1):** Maintain the EXACT face, body shape, and hair of the person in Image 1. DO NOT change ethnicity or proportions.\n`;
+    systemDirective += `TASK: You MUST merge elements with 100% fidelity. NO hallucinations.\n`;
 
-    if (outfitB64) { 
-        parts.push({ inlineData: { mimeType: 'image/png', data: outfitB64 } }); 
-        systemDirective += `2. **OUTFIT (IMAGE 2):** The person MUST WEAR this EXACT clothing. Every pattern, texture, and seam must match Image 2 perfectly.\n`;
-    }
-    
-    if (productB64) {
-        parts.push({ inlineData: { mimeType: 'image/png', data: productB64 } });
-        systemDirective += `3. **PRODUCT (IMAGE 3):** The person MUST HOLD this EXACT product. The design, logo, and material of the product in Image 3 are immutable.\n`;
-    }
+    if (outfitB64) parts.push({ inlineData: { mimeType: 'image/png', data: outfitB64 } });
+    if (productB64) parts.push({ inlineData: { mimeType: 'image/png', data: productB64 } });
+    if (accessoryB64) parts.push({ inlineData: { mimeType: 'image/png', data: accessoryB64 } });
 
-    if (accessoryB64) {
-        parts.push({ inlineData: { mimeType: 'image/png', data: accessoryB64 } });
-        systemDirective += `4. **ACCESSORY (IMAGE 4):** The person MUST WEAR or ATTACH this EXACT accessory (watch/jewelry/bag). Zero deviation from Image 4.\n`;
-    }
-
-    systemDirective += `\n**EXECUTION:** ${prompt}. Background: ${background}. Lighting: Professional Studio. Resolution: High-fidelity. ${negativePrompt ? 'Negative: ' + negativePrompt : ''}`;
-
+    systemDirective += `\n**EXECUTION:** ${prompt}. Background: ${background}. Resolution: ${quality}. ${negativePrompt ? 'Negative: ' + negativePrompt : ''}`;
     parts.push({ text: systemDirective });
 
-    // Fix: imageSize is only available for gemini-3-pro-image-preview
     const imageConfig: any = { aspectRatio };
     if (models.image === 'gemini-3-pro-image-preview') {
-        imageConfig.imageSize = (tier === '1.5-free' ? '1K' : quality) as any;
+        imageConfig.imageSize = quality as any;
     }
 
     const response = await ai.models.generateContent({
         model: models.image,
         contents: { parts },
-        config: { 
-            imageConfig
-        }
+        config: { imageConfig }
     });
 
     for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) return part.inlineData.data;
     }
-    throw new Error("Render failed: No image output from Pro Engine.");
+    throw new Error("Render failed: No output.");
 };
 
 export const generateImage = async (
@@ -139,21 +120,10 @@ export const generateImage = async (
 ): Promise<string> => {
     const ai = getAi();
     const tier = getCurrentUserTier();
-    
-    // Strict Tier Lock
-    validateTierAccess(tier, quality, engine);
-
+    validateTierAccess(tier, quality);
     const models = getModelNames(tier);
 
     if (tier === '1.5-free') {
-        if (engine === 'imagen') {
-            const response = await ai.models.generateImages({
-                model: 'imagen-4.0-generate-001',
-                prompt: prompt + (negativePrompt ? ` (Avoid: ${negativePrompt})` : ''),
-                config: { numberOfImages: 1, outputMimeType: 'image/png', aspectRatio: aspectRatio as any },
-            });
-            return response.generatedImages[0].image.imageBytes;
-        }
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: { parts: [{ text: prompt }] },
@@ -167,15 +137,10 @@ export const generateImage = async (
 
     const parts: any[] = [{ text: prompt }];
     if (refImageB64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageB64 } });
-    if (negativePrompt) parts[0].text += ` --no ${negativePrompt}`;
 
-    let finalQuality = quality;
-    if (tier === '2.5-verified' && (quality === '4K')) finalQuality = '2K';
-
-    // Fix: imageSize is only available for gemini-3-pro-image-preview
     const imageConfig: any = { aspectRatio };
     if (models.image === 'gemini-3-pro-image-preview') {
-        imageConfig.imageSize = finalQuality as any;
+        imageConfig.imageSize = quality as any;
     }
 
     const response = await ai.models.generateContent({
@@ -189,6 +154,8 @@ export const generateImage = async (
     }
     throw new Error("No image generated");
 };
+
+export type ImageEngine = 'imagen' | 'gemini-pro';
 
 export const enhancePrompt = async (prompt: string): Promise<string> => {
     const tier = getCurrentUserTier();
@@ -246,8 +213,6 @@ export const generateStudioSuggestions = async (base64Image: string | null, prom
     return await getJson(response) || [];
 };
 
-export type ImageEngine = 'imagen' | 'gemini-pro';
-
 export const editImageWithGemini = async (base64Image: string, prompt: string): Promise<string> => {
     return generateImage(prompt, '1:1', '2K', base64Image, undefined, 'gemini-pro');
 };
@@ -256,7 +221,6 @@ export const generateThumbnail = async (base64Image: string, layout: string, asp
     const tier = getCurrentUserTier();
     const models = getModelNames(tier);
     
-    // Fix: imageSize is only available for gemini-3-pro-image-preview
     const imageConfig: any = { aspectRatio };
     if (models.image === 'gemini-3-pro-image-preview') {
         imageConfig.imageSize = quality as any;
@@ -300,7 +264,6 @@ export const generatePoster = async (modelB64: string | null, productB64: string
     if (productB64) parts.push({ inlineData: { mimeType: 'image/png', data: productB64 } });
     if (logoB64) parts.push({ inlineData: { mimeType: 'image/png', data: logoB64 } });
 
-    // Fix: imageSize is only available for gemini-3-pro-image-preview
     const imageConfig: any = { aspectRatio: '3:4' };
     if (models.image === 'gemini-3-pro-image-preview') {
         imageConfig.imageSize = quality as any;
@@ -478,7 +441,6 @@ export const generateVeoSceneImage = async (
     if (prodImage) parts.push({ inlineData: { mimeType: 'image/png', data: prodImage } });
     if (prevImageB64) parts.push({ inlineData: { mimeType: 'image/png', data: prevImageB64 } });
     
-    // Fix: imageSize is only available for gemini-3-pro-image-preview
     const imageConfig: any = { aspectRatio };
     if (models.image === 'gemini-3-pro-image-preview') {
         imageConfig.imageSize = quality as any;
