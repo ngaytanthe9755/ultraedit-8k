@@ -20,14 +20,14 @@ interface LayoutProps {
   onOpenLogin: () => void;
 }
 
-// Logo Component hiển thị file logo.png từ thư mục gốc
+// Logo Component hiển thị file logo.png của người dùng
 const AppLogo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
     const dimensions = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-12 h-12' : 'w-10 h-10';
     return (
         <div className={`${dimensions} rounded-xl bg-zinc-800/50 p-1 shadow-lg flex items-center justify-center overflow-hidden shrink-0 border border-white/10`}>
             <img 
                 src="/logo.png" 
-                alt="Logo" 
+                alt="Brand Logo" 
                 className="w-full h-full object-contain"
                 onError={(e) => {
                     // Fallback nếu không tìm thấy file logo.png
@@ -75,14 +75,6 @@ const CreditInfoModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ i
                             <li className="flex justify-between border-b border-white/5 pb-1">
                                 <span>Tạo Video (Veo)</span>
                                 <span className="font-bold text-white">1 Điểm / 1 Video</span>
-                            </li>
-                            <li className="flex justify-between border-b border-white/5 pb-1">
-                                <span>Sản xuất Storyboard/Kịch bản</span>
-                                <span className="font-bold text-white">1 Điểm / 1 Cảnh (Scene)</span>
-                            </li>
-                            <li className="flex justify-between border-b border-white/5 pb-1">
-                                <span>Lập Chiến lược Kênh (Channel Architect)</span>
-                                <span className="font-bold text-white">1 Điểm / 1 Plan</span>
                             </li>
                         </ul>
                     </div>

@@ -358,7 +358,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, 
                         <div className="w-16 h-16 rounded-2xl bg-zinc-800/50 p-1 shadow-2xl mb-4 border border-white/10 overflow-hidden">
                             <img 
                                 src="/logo.png" 
-                                alt="Logo" 
+                                alt="Brand Logo" 
                                 className="w-full h-full object-contain"
                                 onError={(e) => (e.target as HTMLImageElement).src = "https://img.icons8.com/fluency/48/layers.png"}
                             />
