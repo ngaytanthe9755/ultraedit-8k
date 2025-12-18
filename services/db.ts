@@ -1,13 +1,15 @@
 
 import { LibraryItem, SavedCharacter } from '../types';
-import { driveService } from './googleDriveService';
 
 const DB_NAME = 'creative_studio_db';
 const STORE_LIBRARY = 'library_items';
 const STORE_CHARACTERS = 'saved_characters';
 const DB_VERSION = 2;
 
+// --- EVENT BUS HELPER ---
 const notifyLibraryChange = () => {
+    // Dispatch event to window so Library component can reload
+    console.log("[DB] Transaction committed. Dispatching 'library_updated' event.");
     window.dispatchEvent(new Event('library_updated'));
 };
 
@@ -39,6 +41,7 @@ export const initDB = (): Promise<IDBDatabase> => {
   });
 };
 
+// --- Library Operations ---
 export const saveItem = async (item: LibraryItem): Promise<void> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -46,19 +49,24 @@ export const saveItem = async (item: LibraryItem): Promise<void> => {
     const store = transaction.objectStore(STORE_LIBRARY);
     const request = store.put(item);
 
+    // IMPORTANT: Wait for transaction to complete
     transaction.oncomplete = () => {
-        // Background sync to Drive if configured
-        if (driveService.isConfigured()) {
-            driveService.syncItem(item.id, item).catch(err => console.warn("Cloud sync deferred", err));
-        }
-
+        // Increased delay to 200ms to ensure large Base64 data is fully flushed 
+        // to disk before any UI tries to read it back.
         setTimeout(() => {
             notifyLibraryChange();
         }, 200);
         resolve();
     };
 
-    transaction.onerror = () => reject(transaction.error);
+    transaction.onerror = (event) => {
+        console.error("Save Item Transaction Error:", transaction.error);
+        reject(transaction.error);
+    };
+
+    request.onerror = (event) => {
+        console.error("Save Item Request Error:", request.error);
+    };
   });
 };
 
@@ -92,9 +100,6 @@ export const deleteItem = async (id: string): Promise<void> => {
     store.delete(id);
     
     transaction.oncomplete = () => {
-        if (driveService.isConfigured()) {
-            driveService.deleteItem(id).catch(err => console.warn("Cloud delete deferred", err));
-        }
         setTimeout(() => {
             notifyLibraryChange();
         }, 200);
@@ -113,9 +118,6 @@ export const deleteItems = async (ids: string[]): Promise<void> => {
         
         ids.forEach(id => {
             store.delete(id);
-            if (driveService.isConfigured()) {
-                driveService.deleteItem(id).catch(() => {});
-            }
         });
         
         transaction.oncomplete = () => {
@@ -129,6 +131,12 @@ export const deleteItems = async (ids: string[]): Promise<void> => {
     });
 };
 
+export const getItemsByType = async (type: string): Promise<LibraryItem[]> => {
+    const all = await getAllItems();
+    return all.filter(i => i.type === type);
+}
+
+// --- Character Operations ---
 export const saveCharacter = async (char: SavedCharacter): Promise<void> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -137,9 +145,6 @@ export const saveCharacter = async (char: SavedCharacter): Promise<void> => {
     store.put(char);
     
     transaction.oncomplete = () => {
-        if (driveService.isConfigured()) {
-            driveService.syncItem(`char_${char.id}`, char).catch(() => {});
-        }
         setTimeout(() => {
             notifyLibraryChange();
         }, 200);
@@ -165,28 +170,63 @@ export const getAllCharacters = async (): Promise<SavedCharacter[]> => {
   });
 }
 
+// --- Backup & Restore Operations ---
 export const exportDatabase = async (): Promise<string> => {
-    const items = await getAllItems();
-    const characters = await getAllCharacters();
-    return JSON.stringify({ version: 1, timestamp: Date.now(), items, characters });
+    try {
+        const items = await getAllItems();
+        const characters = await getAllCharacters();
+        
+        const backupData = {
+            version: 1,
+            timestamp: Date.now(),
+            items,
+            characters
+        };
+        
+        return JSON.stringify(backupData);
+    } catch (error) {
+        throw new Error("Failed to export database");
+    }
 };
 
 export const importDatabase = async (jsonString: string): Promise<{ itemsCount: number; charsCount: number }> => {
     const db = await initDB();
+    
     return new Promise((resolve, reject) => {
         try {
             const data = JSON.parse(jsonString);
             const transaction = db.transaction([STORE_LIBRARY, STORE_CHARACTERS], 'readwrite');
             const itemStore = transaction.objectStore(STORE_LIBRARY);
             const charStore = transaction.objectStore(STORE_CHARACTERS);
-            let itemsCount = 0, charsCount = 0;
-            if (Array.isArray(data.items)) data.items.forEach((item: any) => { itemStore.put(item); itemsCount++; });
-            if (Array.isArray(data.characters)) data.characters.forEach((char: any) => { charStore.put(char); charsCount++; });
+
+            let itemsCount = 0;
+            let charsCount = 0;
+
+            if (Array.isArray(data.items)) {
+                data.items.forEach((item: LibraryItem) => {
+                    itemStore.put(item);
+                    itemsCount++;
+                });
+            }
+
+            if (Array.isArray(data.characters)) {
+                data.characters.forEach((char: SavedCharacter) => {
+                    charStore.put(char);
+                    charsCount++;
+                });
+            }
+
             transaction.oncomplete = () => {
-                setTimeout(() => notifyLibraryChange(), 200);
+                setTimeout(() => {
+                    notifyLibraryChange();
+                }, 200);
                 resolve({ itemsCount, charsCount });
             };
+
             transaction.onerror = () => reject(transaction.error);
-        } catch (error) { reject(error); }
+
+        } catch (error) {
+            reject(error);
+        }
     });
 };

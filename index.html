@@ -5,19 +5,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./vite.svg" />
     <link rel="manifest" href="./manifest.json" />
+    <!-- FIXED: Viewport settings to prevent zooming on inputs and force 1:1 scale -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#09090b" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Gemini UltraEdit 8K</title>
     
+    <!-- ADDED: Be Vietnam Pro & Artistic Fonts (Calligraphy, Display) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Pacifico&family=Playball&family=Sedgwick+Ave+Display&display=swap" rel="stylesheet">
-
-    <!-- Google API Client Libraries -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js" async defer></script>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -54,12 +52,12 @@
               }
             },
             screens: {
-              'xs': '475px',
-              'sm': '640px',
-              'md': '768px',
-              'lg': '1024px',
-              'xl': '1280px',
-              '2xl': '1536px',
+              'xs': '475px', // Mobile S/M
+              'sm': '640px', // Mobile L
+              'md': '768px', // Tablets (Portrait)
+              'lg': '1024px', // Tablets (Landscape) / Laptops
+              'xl': '1280px', // Desktops
+              '2xl': '1536px', // Large Screens
             }
           }
         }
@@ -71,8 +69,8 @@
       }
       html, body {
         height: 100%;
-        overflow: hidden;
-        overscroll-behavior: none;
+        overflow: hidden; /* App-like structure, scrolling handled by containers */
+        overscroll-behavior: none; /* Prevent bounce scrolling on iOS */
         -webkit-tap-highlight-color: transparent;
       }
       body {
@@ -80,6 +78,8 @@
         color: #e4e4e7;
         font-family: 'Be Vietnam Pro', sans-serif;
       }
+      
+      /* Custom Scrollbar */
       ::-webkit-scrollbar {
         width: 4px;
         height: 4px;
@@ -94,11 +94,16 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #52525b; 
       }
+      
+      /* Mobile Input Optimization */
       @media screen and (max-width: 768px) {
         input, select, textarea {
+          /* Preventing auto-zoom on iOS by enforcing font-size if necessary, 
+             though meta viewport maximum-scale=1.0 is the primary lock. */
           transform-origin: left top;
         }
       }
+
       .perspective-container {
         perspective: 1000px;
       }
