@@ -2,12 +2,17 @@
 /**
  * Service handling two-way interaction with Google Drive API
  * Uses Google Identity Services (GIS) for Auth and Google API Client (GAPI) for Requests.
+ * 
+ * UPGRADE NOTES:
+ * - Removed brittle 'discoveryDocs' URL which causes "API discovery response missing" errors.
+ * - Implemented dynamic script loading.
+ * - Used explicit `gapi.client.load` for Drive V3.
+ * - Improved Multipart body construction.
  */
 
-// Name of the folder in Google Drive where app data will be stored
 const FOLDER_NAME = 'UltraEdit_8K_Data';
-const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file'; // Only access files created by this app
+// We do NOT use DISCOVERY_DOC in init anymore to prevent the specific error. We load 'drive', 'v3' directly.
+const SCOPES = 'https://www.googleapis.com/auth/drive.file'; 
 
 interface DriveConfig {
     clientId: string;
@@ -45,7 +50,11 @@ class GoogleDriveService {
 
     public isAuthenticated(): boolean {
         if (!this.config?.accessToken) return false;
-        // Check rudimentary expiry if available, otherwise assume valid until 401
+        // Check if token is expired (giving 1 minute buffer)
+        if (this.config.tokenExpiry && Date.now() > (this.config.tokenExpiry - 60000)) {
+            console.warn("[Drive] Token expired");
+            return false;
+        }
         return true; 
     }
 
@@ -60,30 +69,60 @@ class GoogleDriveService {
         this.tokenClient = null;
         this.gapiInited = false;
         this.gisInited = false;
+        this.appFolderId = null;
     }
 
     /**
-     * Initialize GAPI and GIS scripts
+     * Helper to dynamically load scripts if they are missing from index.html
+     */
+    private loadScript(src: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (document.querySelector(`script[src="${src}"]`)) {
+                resolve();
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = src;
+            script.async = true;
+            script.defer = true;
+            script.onload = () => resolve();
+            script.onerror = (err) => reject(err);
+            document.body.appendChild(script);
+        });
+    }
+
+    /**
+     * Initialize GAPI and GIS scripts robustly
      */
     public async initialize(): Promise<void> {
         if (!this.isConfigured()) throw new Error("Missing Client ID or API Key");
+
+        // Ensure scripts are loaded
+        await Promise.all([
+            this.loadScript('https://apis.google.com/js/api.js'),
+            this.loadScript('https://accounts.google.com/gsi/client')
+        ]);
 
         return new Promise((resolve, reject) => {
             const gapi = (window as any).gapi;
             const google = (window as any).google;
 
             if (!gapi || !google) {
-                reject(new Error("Google API scripts not loaded. Check internet connection."));
+                reject(new Error("Google API scripts failed to load."));
                 return;
             }
 
             // 1. Init GAPI Client
             gapi.load('client', async () => {
                 try {
+                    // Initialize client WITHOUT discoveryDocs to avoid the "missing required fields" error
                     await gapi.client.init({
                         apiKey: this.config!.apiKey,
-                        discoveryDocs: [DISCOVERY_DOC],
                     });
+
+                    // Explicitly load Drive V3. This is the fix for the error.
+                    await gapi.client.load('drive', 'v3');
+                    
                     this.gapiInited = true;
 
                     // 2. Init GIS Token Client
@@ -105,14 +144,14 @@ class GoogleDriveService {
                     });
                     this.gisInited = true;
 
-                    // Restore token if exists
-                    if (this.config?.accessToken) {
+                    // Restore token if exists and valid
+                    if (this.config?.accessToken && this.isAuthenticated()) {
                         gapi.client.setToken({ access_token: this.config.accessToken });
                     }
 
                     resolve();
                 } catch (e) {
-                    console.error("GAPI Init Error", e);
+                    console.error("GAPI/GIS Init Error", e);
                     reject(e);
                 }
             });
@@ -123,7 +162,7 @@ class GoogleDriveService {
      * Trigger OAuth Flow Popup
      */
     public async login(): Promise<void> {
-        if (!this.gisInited) await this.initialize();
+        if (!this.gisInited || !this.tokenClient) await this.initialize();
         
         return new Promise((resolve, reject) => {
             try {
@@ -138,17 +177,15 @@ class GoogleDriveService {
                             tokenExpiry: Date.now() + (resp.expires_in * 1000)
                         };
                         localStorage.setItem('ue_drive_config', JSON.stringify(this.config));
+                        // Set token for GAPI immediately
                         (window as any).gapi.client.setToken(resp);
                         resolve();
                     }
                 };
                 
                 // Request access
-                if ((window as any).gapi.client.getToken() === null) {
-                    this.tokenClient.requestAccessToken({ prompt: 'consent' });
-                } else {
-                    this.tokenClient.requestAccessToken({ prompt: '' });
-                }
+                // If we already have a valid token, we might skip this, but login() implies user action
+                this.tokenClient.requestAccessToken({ prompt: 'consent' });
             } catch (e) {
                 reject(e);
             }
@@ -163,14 +200,16 @@ class GoogleDriveService {
         const gapi = (window as any).gapi;
 
         try {
+            // Check if folder exists
             const response = await gapi.client.drive.files.list({
                 q: `name = '${FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
                 fields: 'files(id)',
             });
 
-            if (response.result.files.length > 0) {
+            if (response.result.files && response.result.files.length > 0) {
                 this.appFolderId = response.result.files[0].id;
             } else {
+                // Create folder
                 const folderMetadata = {
                     name: FOLDER_NAME,
                     mimeType: 'application/vnd.google-apps.folder',
@@ -182,8 +221,11 @@ class GoogleDriveService {
                 this.appFolderId = folder.result.id;
             }
             return this.appFolderId!;
-        } catch (e) {
+        } catch (e: any) {
             console.error("Error managing folder on Drive", e);
+            if (e.status === 401) {
+                throw new Error("Token expired. Please reconnect Drive.");
+            }
             throw e;
         }
     }
@@ -192,7 +234,11 @@ class GoogleDriveService {
      * Upload or Update a file (JSON or Image)
      */
     public async uploadItem(item: any): Promise<void> {
-        if (!this.isAuthenticated()) return;
+        if (!this.isAuthenticated()) {
+            console.warn("[Drive] Not authenticated or token expired.");
+            return;
+        }
+        
         const gapi = (window as any).gapi;
         
         try {
@@ -205,37 +251,60 @@ class GoogleDriveService {
                 fields: 'files(id)',
             });
 
-            const fileContent = JSON.stringify(item);
+            const fileContent = JSON.stringify(item, null, 2); // Pretty print for easier debugging
             const contentType = 'application/json';
-            const metadata = {
+            
+            // Metadata part
+            const metadata: any = {
                 name: fileName,
-                mimeType: contentType,
-                parents: listResp.result.files.length === 0 ? [folderId] : undefined // Only set parent on create
+                mimeType: contentType
             };
 
-            const multipartRequestBody =
-                `\r\n--foo_bar_baz\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(metadata)}\r\n` +
-                `--foo_bar_baz\r\nContent-Type: ${contentType}\r\n\r\n${fileContent}\r\n` +
-                `--foo_bar_baz--`;
+            const existingFileId = listResp.result.files.length > 0 ? listResp.result.files[0].id : null;
 
-            const method = listResp.result.files.length > 0 ? 'PATCH' : 'POST';
-            const path = listResp.result.files.length > 0 
-                ? `/upload/drive/v3/files/${listResp.result.files[0].id}`
+            if (!existingFileId) {
+                metadata.parents = [folderId];
+            }
+
+            // Correctly construct Multipart body
+            const boundary = '-------314159265358979323846';
+            const delimiter = "\r\n--" + boundary + "\r\n";
+            const close_delim = "\r\n--" + boundary + "--";
+
+            const multipartRequestBody =
+                delimiter +
+                'Content-Type: application/json\r\n\r\n' +
+                JSON.stringify(metadata) +
+                delimiter +
+                'Content-Type: ' + contentType + '\r\n\r\n' +
+                fileContent +
+                close_delim;
+
+            const requestPath = existingFileId 
+                ? `/upload/drive/v3/files/${existingFileId}`
                 : '/upload/drive/v3/files';
+                
+            const method = existingFileId ? 'PATCH' : 'POST';
 
             await gapi.client.request({
-                path: path,
+                path: requestPath,
                 method: method,
                 params: { uploadType: 'multipart' },
-                headers: { 'Content-Type': 'multipart/related; boundary=foo_bar_baz' },
+                headers: { 
+                    'Content-Type': 'multipart/related; boundary="' + boundary + '"' 
+                },
                 body: multipartRequestBody,
             });
 
-            console.log(`[Drive] Synced item ${item.id}`);
+            console.log(`[Drive] Synced item ${item.id} (${method})`);
 
-        } catch (e) {
+        } catch (e: any) {
             console.error(`[Drive] Upload failed for ${item.id}`, e);
-            // Optionally handle token expiry by calling login() again?
+            if (e.status === 401 || e.status === 403) {
+                // Token likely invalid
+                this.config!.accessToken = undefined; // Force re-login next time
+                localStorage.setItem('ue_drive_config', JSON.stringify(this.config));
+            }
         }
     }
 
@@ -243,9 +312,18 @@ class GoogleDriveService {
      * Download all JSON files from the app folder
      */
     public async fetchAllItems(): Promise<any[]> {
-        if (!this.isAuthenticated()) throw new Error("Not authenticated");
+        if (!this.isAuthenticated()) throw new Error("Not authenticated or token expired");
+        
+        // Re-ensure GAPI is loaded (in case of page refresh state loss)
+        if (!this.gapiInited) await this.initialize();
+
         const gapi = (window as any).gapi;
-        const folderId = await this.getAppFolderId();
+        let folderId;
+        try {
+            folderId = await this.getAppFolderId();
+        } catch (e) {
+            throw new Error("Could not access App Folder. Please reconnect.");
+        }
         
         const items: any[] = [];
         let pageToken = null;
@@ -255,13 +333,14 @@ class GoogleDriveService {
                 const response: any = await gapi.client.drive.files.list({
                     q: `'${folderId}' in parents and mimeType = 'application/json' and trashed = false`,
                     fields: 'nextPageToken, files(id, name)',
-                    pageToken: pageToken
+                    pageToken: pageToken,
+                    pageSize: 100 // Maximize page size
                 });
 
                 const files = response.result.files;
                 
-                // Fetch content in parallel chunks to be faster
-                const batchSize = 10;
+                // Fetch content in parallel chunks
+                const batchSize = 5; // Reduced batch size to prevent rate limiting
                 for (let i = 0; i < files.length; i += batchSize) {
                     const batch = files.slice(i, i + batchSize);
                     const contents = await Promise.all(batch.map((f: any) => 
@@ -277,8 +356,9 @@ class GoogleDriveService {
             } while (pageToken);
 
             return items;
-        } catch (e) {
+        } catch (e: any) {
             console.error("Fetch all failed", e);
+            if (e.status === 401) throw new Error("Token expired. Please reconnect.");
             throw e;
         }
     }
@@ -289,6 +369,7 @@ class GoogleDriveService {
     public async deleteItem(id: string): Promise<void> {
         if (!this.isAuthenticated()) return;
         const gapi = (window as any).gapi;
+        
         try {
             const folderId = await this.getAppFolderId();
             const fileName = `${id}.json`;

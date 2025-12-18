@@ -52,10 +52,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                 setDriveApiKey(config.apiKey);
                 if (driveService.isAuthenticated()) {
                     setIsDriveConnected(true);
+                } else if (config.accessToken) {
+                    addToast("Token hết hạn", "Vui lòng kết nối lại Google Drive.", "info");
+                    setIsDriveConnected(false);
                 }
             } else {
                 // Try pre-fill from env if available (for dev convenience)
-                // Note: In real production, users enter their own keys usually
                 if (process.env.GOOGLE_CLIENT_ID) setDriveClientId(process.env.GOOGLE_CLIENT_ID);
                 if (process.env.GOOGLE_API_KEY) setDriveApiKey(process.env.GOOGLE_API_KEY);
             }
@@ -71,13 +73,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
         setDriveLoading(true);
         try {
             driveService.saveConfig(driveClientId, driveApiKey);
-            await driveService.initialize();
+            // This now explicitly loads Drive v3 to avoid discovery error
+            await driveService.initialize(); 
             await driveService.login();
             setIsDriveConnected(true);
             addToast('Kết nối thành công', 'Đã liên kết với Google Drive.', 'success');
         } catch (e: any) {
             console.error(e);
-            addToast('Lỗi kết nối', e.error || e.message || 'Kiểm tra lại Client ID/API Key và Origin.', 'error');
+            let msg = e.error || e.message || 'Lỗi không xác định.';
+            if (msg.includes('popup')) msg = "Trình duyệt chặn Popup đăng nhập. Hãy cho phép.";
+            addToast('Lỗi kết nối', msg, 'error');
             setIsDriveConnected(false);
         } finally {
             setDriveLoading(false);
@@ -85,7 +90,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
     };
 
     const handleSyncToDrive = async () => {
-        if (!isDriveConnected) return;
+        if (!isDriveConnected) {
+            addToast("Chưa kết nối", "Vui lòng kết nối lại Drive.", "error");
+            return;
+        }
         setIsProcessing(true);
         try {
             const allItems = await getAllItems();
@@ -99,15 +107,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
             }
             
             addToast('Hoàn tất', 'Đã đồng bộ toàn bộ dữ liệu lên Google Drive.', 'success');
-        } catch (e) {
-            addToast('Lỗi đồng bộ', 'Có lỗi khi tải lên Drive.', 'error');
+        } catch (e: any) {
+            console.error(e);
+            if (e.status === 401) {
+                addToast("Hết phiên", "Token Google hết hạn. Vui lòng kết nối lại.", "error");
+                setIsDriveConnected(false);
+            } else {
+                addToast('Lỗi đồng bộ', 'Có lỗi khi tải lên Drive.', 'error');
+            }
         } finally {
             setIsProcessing(false);
         }
     };
 
     const handleFetchFromDrive = async () => {
-        if (!isDriveConnected) return;
+        if (!isDriveConnected) {
+            addToast("Chưa kết nối", "Vui lòng kết nối lại Drive.", "error");
+            return;
+        }
         setIsProcessing(true);
         try {
             addToast('Đang tải', 'Đang lấy dữ liệu từ Drive...', 'info');
@@ -118,13 +135,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
             } else {
                 // Save to local IndexedDB
                 for (const item of items) {
-                    await saveItem(item); // Note: this might trigger upload back to Drive due to db hooks, but safe due to ID check
+                    await saveItem(item); 
                 }
                 addToast('Khôi phục xong', `Đã tải về ${items.length} mục từ Drive.`, 'success');
                 setTimeout(() => window.dispatchEvent(new Event('library_updated')), 500);
             }
-        } catch (e) {
-            addToast('Lỗi', 'Không thể tải dữ liệu từ Drive.', 'error');
+        } catch (e: any) {
+            console.error(e);
+            if (e.message?.includes('Token expired')) {
+                addToast("Hết phiên", "Token Google hết hạn. Vui lòng kết nối lại.", "error");
+                setIsDriveConnected(false);
+            } else {
+                addToast('Lỗi', 'Không thể tải dữ liệu từ Drive.', 'error');
+            }
         } finally {
             setIsProcessing(false);
         }
@@ -278,7 +301,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                                     disabled={driveLoading}
                                     className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition-all"
                                 >
-                                    {driveLoading ? <Loader2 size={14} className="animate-spin"/> : <Link size={14}/>} Kết Nối Drive
+                                    {driveLoading ? <Loader2 size={14} className="animate-spin"/> : <Link size={14}/>} Kết Nối Drive (Popup)
                                 </button>
                             </div>
                         ) : (
