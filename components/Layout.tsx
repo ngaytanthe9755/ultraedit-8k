@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, X, Layers, Image as ImageIcon, Video, Grid, LogOut, 
-  User as UserIcon, Wand2, MonitorPlay, Settings, Cloud, Download, MonitorDown, Film, Users, BookOpen, Home, Bell, LogIn, Shield, Coins, MessageCircle, HelpCircle, AlertCircle, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle, TrendingUp
+  User as UserIcon, Wand2, MonitorPlay, Settings, Cloud, Download, MonitorDown, Film, Users, BookOpen, Home, Bell, LogIn, Shield, Coins, MessageCircle, HelpCircle, AlertCircle, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle, TrendingUp, Sparkles
 } from 'lucide-react';
 import { ModuleType, User, AppNotification } from '../types';
 
@@ -20,7 +20,24 @@ interface LayoutProps {
   onOpenLogin: () => void;
 }
 
-// ... CreditInfoModal component remains same ...
+// Logo Component Reusable - Updated to use /logo.png
+const AppLogo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
+    const dimensions = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-12 h-12' : 'w-10 h-10';
+    return (
+        <div className={`${dimensions} rounded-xl bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 p-0.5 shadow-lg shadow-indigo-500/20 flex items-center justify-center overflow-hidden shrink-0`}>
+            <img 
+                src="/logo.png" 
+                alt="UltraEdit 8K Logo" 
+                className="w-full h-full object-contain rounded-lg"
+                onError={(e) => {
+                    // Fallback nếu người dùng chưa kịp bỏ file logo.png vào thư mục
+                    (e.target as HTMLImageElement).src = "https://api.dicebear.com/7.x/identicon/svg?seed=UltraEdit8K&backgroundColor=4f46e5";
+                }}
+            />
+        </div>
+    );
+};
+
 const CreditInfoModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
     return (
@@ -134,7 +151,6 @@ const Layout: React.FC<LayoutProps> = ({
     window.open('https://t.me/JacyGM_Official', '_blank');
   };
 
-  // UPGRADED NAVIGATION LABELS
   const allNavItems = [
     { id: ModuleType.HOME, label: 'Dashboard', icon: Home },
     { id: ModuleType.CHANNEL_BUILDER, label: 'Channel Architect', icon: TrendingUp },
@@ -159,7 +175,6 @@ const Layout: React.FC<LayoutProps> = ({
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Group notifications by date
   const groupedNotifications = React.useMemo(() => {
       const groups: Record<string, AppNotification[]> = {
           'Hôm nay': [],
@@ -199,12 +214,10 @@ const Layout: React.FC<LayoutProps> = ({
         )}
 
         <div className="p-6 border-b border-zinc-800 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <span className="font-black text-white text-sm">UE</span>
-          </div>
+          <AppLogo />
           <div>
-              <h1 className="text-lg font-black text-white tracking-tight">UltraEdit 8K</h1>
-              <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Gemini Pro Suite</p>
+              <h1 className="text-lg font-black text-white tracking-tight leading-none">UltraEdit 8K</h1>
+              <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest mt-1">Gemini Pro Suite</p>
           </div>
         </div>
         
@@ -281,7 +294,7 @@ const Layout: React.FC<LayoutProps> = ({
         {/* Header - Mobile */}
         <header className="lg:hidden h-16 bg-zinc-900/90 backdrop-blur-xl border-b border-zinc-800 flex items-center justify-between px-4 sticky top-0 z-30 shrink-0">
           <div className="flex items-center gap-3">
-             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg"><span className="font-black text-white text-xs">UE</span></div>
+             <AppLogo size="sm" />
             <span className="font-black text-lg text-white tracking-tight">UltraEdit 8K</span>
           </div>
           <div className="flex items-center gap-3">

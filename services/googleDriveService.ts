@@ -2,7 +2,6 @@
 /**
  * Dịch vụ xử lý tương tác hai chiều với Google Drive API (V3)
  * Tối ưu hóa cho Google Identity Services (GIS)
- * Sử dụng cơ chế nạp Script động để tránh lỗi chặn script.
  */
 
 const FOLDER_NAME = 'UltraEdit_8K_Cloud_Storage';
@@ -46,8 +45,12 @@ class GoogleDriveService {
     }
 
     /**
-     * Nạp một script động vào trang web
+     * Trạng thái liên kết thực tế: Đã cấu hình và đã có Access Token còn hạn.
      */
+    public isLinked(): boolean {
+        return this.isConfigured() && !!this.config?.accessToken;
+    }
+
     private injectScript(src: string): Promise<void> {
         return new Promise((resolve, reject) => {
             if (document.querySelector(`script[src="${src}"]`)) {
@@ -58,25 +61,14 @@ class GoogleDriveService {
             script.src = src;
             script.async = true;
             script.defer = true;
-            script.onload = () => {
-                console.log(`[Drive] Đã nạp: ${src}`);
-                resolve();
-            };
-            script.onerror = () => {
-                console.error(`[Drive] Không thể tải: ${src}`);
-                reject(new Error(`Lỗi nạp script: ${src}. Có thể do AdBlock hoặc ISP chặn Google APIs.`));
-            };
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Lỗi nạp script: ${src}`));
             document.head.appendChild(script);
         });
     }
 
-    /**
-     * Nạp đồng thời cả 2 thư viện cần thiết của Google
-     */
     private async loadGoogleScripts(): Promise<void> {
         if (this.scriptsLoaded) return;
-        
-        console.log("[Drive] Bắt đầu nạp thư viện Google API...");
         try {
             await Promise.all([
                 this.injectScript('https://apis.google.com/js/api.js'),
@@ -92,57 +84,28 @@ class GoogleDriveService {
     public async initialize(): Promise<void> {
         this.loadConfig();
         if (!this.isConfigured()) return;
-
-        // 1. Nạp script động
-        try {
-            await this.loadGoogleScripts();
-        } catch (e) {
-            throw e;
-        }
+        await this.loadGoogleScripts();
         
         const gapi = (window as any).gapi;
         const google = (window as any).google;
 
-        if (!gapi || !google) {
-            throw new Error("Thư viện Google chưa sẵn sàng sau khi nạp.");
-        }
-
         return new Promise((resolve, reject) => {
-            console.log("[Drive] Đang khởi tạo GAPI...");
-            
-            const loadTimeout = setTimeout(() => {
-                reject(new Error("GAPI initialization timeout. Hãy kiểm tra kết nối mạng."));
-            }, 20000);
-
             gapi.load('client', {
                 callback: async () => {
-                    clearTimeout(loadTimeout);
                     try {
                         await gapi.client.init({
                             apiKey: this.config!.apiKey,
                             discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
                         });
 
-                        console.log("[Drive] Khởi tạo Identity Client...");
                         this.tokenClient = google.accounts.oauth2.initTokenClient({
                             client_id: this.config!.clientId,
                             scope: 'https://www.googleapis.com/auth/drive.file',
                             callback: (resp: any) => {
-                                if (resp.error !== undefined) {
-                                    console.error("[Drive] Auth Callback Error:", resp);
-                                    return;
-                                }
-                                console.log("[Drive] Đăng nhập Cloud thành công.");
-                                // Lưu token và config
-                                this.config = {
-                                    ...this.config!,
-                                    accessToken: resp.access_token
-                                };
+                                if (resp.error !== undefined) return;
+                                this.config = { ...this.config!, accessToken: resp.access_token };
                                 localStorage.setItem('ue_drive_config', JSON.stringify(this.config));
-                                
-                                // Set token vào gapi
                                 (window as any).gapi.client.setToken({ access_token: resp.access_token });
-                                
                                 this.initialized = true;
                                 window.dispatchEvent(new Event('drive_linked'));
                             },
@@ -153,48 +116,27 @@ class GoogleDriveService {
                         }
                         
                         this.initialized = true;
-                        console.log("[Drive] Dịch vụ Cloud đã sẵn sàng.");
                         resolve();
                     } catch (e: any) {
-                        console.error("[Drive] GAPI Init Error:", e);
-                        reject(new Error(`Lỗi khởi tạo GAPI: ${e.message || e.error}`));
+                        reject(e);
                     }
                 },
-                onerror: (e: any) => {
-                    clearTimeout(loadTimeout);
-                    reject(new Error("GAPI load module 'client' failed."));
-                }
+                onerror: (e: any) => reject(new Error("GAPI failed."))
             });
         });
     }
 
     public async authenticate(): Promise<void> {
-        console.log("[Drive] Yêu cầu xác thực người dùng...");
         await this.initialize();
-        
-        if (!this.tokenClient) {
-            throw new Error("Hệ thống xác thực chưa được tạo. Kiểm tra Client ID.");
-        }
-        
-        try {
-            // Luôn yêu cầu consent để đảm bảo cấp mới token nếu cần
-            this.tokenClient.requestAccessToken({ prompt: 'consent' });
-        } catch (e: any) {
-            console.error("[Drive] Popup Error:", e);
-            throw new Error("Không thể mở cửa sổ đăng nhập. Kiểm tra chặn popup.");
-        }
+        if (!this.tokenClient) throw new Error("Xác thực chưa sẵn sàng.");
+        this.tokenClient.requestAccessToken({ prompt: 'consent' });
     }
 
     private async getOrCreateFolder(): Promise<string | null> {
         if (this.folderId) return this.folderId;
         const gapi = (window as any).gapi;
-        
         if (!gapi?.client?.drive) {
-            try {
-                await this.initialize();
-            } catch (e) {
-                return null;
-            }
+            try { await this.initialize(); } catch (e) { return null; }
         }
 
         try {
@@ -206,26 +148,22 @@ class GoogleDriveService {
             if (response.result.files.length > 0) {
                 this.folderId = response.result.files[0].id;
             } else {
-                const folderMetadata = {
-                    name: FOLDER_NAME,
-                    mimeType: 'application/vnd.google-apps.folder',
-                };
                 const folder = await gapi.client.drive.files.create({
-                    resource: folderMetadata,
+                    resource: { name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' },
                     fields: 'id',
                 });
                 this.folderId = folder.result.id;
             }
             return this.folderId;
         } catch (e) {
-            console.error("[Drive] Folder Management Error:", e);
             return null;
         }
     }
 
     public async syncItem(id: string, data: any): Promise<void> {
-        if (!this.isConfigured() || !this.initialized) return;
+        if (!this.isLinked()) return;
         const gapi = (window as any).gapi;
+        if (!this.initialized) await this.initialize();
         
         try {
             const folderId = await this.getOrCreateFolder();
@@ -237,11 +175,7 @@ class GoogleDriveService {
             });
 
             const fileContent = JSON.stringify(data);
-            const metadata = {
-                name: `${id}.json`,
-                mimeType: MIME_TYPE_JSON,
-                parents: [folderId],
-            };
+            const metadata = { name: `${id}.json`, mimeType: MIME_TYPE_JSON, parents: [folderId] };
 
             if (listResp.result.files.length > 0) {
                 const fileId = listResp.result.files[0].id;
@@ -268,13 +202,14 @@ class GoogleDriveService {
                 });
             }
         } catch (e: any) {
-            console.warn("[Drive] Sync failed silently.");
+            console.error("[Drive] Sync error:", e);
         }
     }
 
     public async fetchAllFromCloud(): Promise<any[]> {
-        if (!this.isConfigured()) return [];
+        if (!this.isLinked()) return [];
         const gapi = (window as any).gapi;
+        if (!this.initialized) await this.initialize();
         
         try {
             const folderId = await this.getOrCreateFolder();
@@ -300,14 +235,14 @@ class GoogleDriveService {
             }
             return items;
         } catch (e) {
-            console.error("[Drive] Fetch error:", e);
             throw e;
         }
     }
 
     public async deleteItem(id: string): Promise<void> {
-        if (!this.isConfigured() || !this.initialized) return;
+        if (!this.isLinked()) return;
         const gapi = (window as any).gapi;
+        if (!this.initialized) await this.initialize();
         
         try {
             const folderId = await this.getOrCreateFolder();

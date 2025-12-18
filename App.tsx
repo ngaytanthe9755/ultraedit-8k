@@ -178,8 +178,6 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, addToast }) => {
-    // ... [AuthModal implementation unchanged] ...
-    // Using previous implementation for AuthModal to save tokens
     const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -342,7 +340,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, 
         if (telegramChatId && otpStep !== 'verified') { addToast("Chưa xác thực", "Vui lòng xác thực Telegram ID.", "error"); return; }
         setIsLoading(true);
         try {
-            // Fix: Added missing modelTier property
             const newUser: RegisteredUser = { username, email, password, role: 'user', isVerified: false, modelTier: '1.5-free', permissions: {}, credits: 10, createdAt: Date.now(), deviceId: '', telegramChatId: telegramChatId || undefined };
             const res = await registerUser(newUser);
             if (res.success && res.user) { onLoginSuccess(res.user); addToast("Thành công", "Đăng ký thành công!", "success"); onClose(); } 
@@ -357,7 +354,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, 
             <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col">
                 <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white z-10" disabled={isLoading}><X size={20}/></button>
                 <div className="p-8 overflow-y-auto custom-scrollbar">
-                    <div className="text-center mb-6"><h2 className="text-2xl font-black text-white mb-2">UltraEdit 8K</h2><p className="text-sm text-zinc-400">{mode === 'login' ? 'Đăng nhập bảo mật' : mode === 'register' ? 'Tạo tài khoản mới' : 'Khôi phục tài khoản'}</p></div>
+                    <div className="text-center mb-6 flex flex-col items-center">
+                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 p-1 shadow-2xl mb-4">
+                            <img 
+                                src="/logo.png" 
+                                alt="Logo" 
+                                className="w-full h-full object-contain rounded-xl"
+                                onError={(e) => (e.target as HTMLImageElement).src = "https://api.dicebear.com/7.x/identicon/svg?seed=UltraEdit8K&backgroundColor=4f46e5"}
+                            />
+                        </div>
+                        <h2 className="text-2xl font-black text-white mb-2">UltraEdit 8K</h2>
+                        <p className="text-sm text-zinc-400">{mode === 'login' ? 'Đăng nhập bảo mật' : mode === 'register' ? 'Tạo tài khoản mới' : 'Khôi phục tài khoản'}</p>
+                    </div>
                     {mode === 'login' && (
                         <div className="space-y-4">
                             {loginStep === 'credentials' ? (
@@ -400,7 +408,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, 
 
 const App: React.FC = () => {
   const [activeModule, setActiveModule] = useState<ModuleType>(ModuleType.HOME);
-  // Fix: Added missing modelTier initial property
   const [user, setUser] = useState<User>({ 
       username: 'Guest', 
       email: '',
@@ -491,23 +498,12 @@ const App: React.FC = () => {
               }
 
               // Sync Notifications - Merge cloud with local to avoid losing local-only recent pushes
-              // Current strategy: Use Cloud as source of truth for PERSISTED items, but respect local if more recent
-              // Simplified: Just take server notifs for now to ensure consistency across devices
               const serverNotifs = getUserNotifications(currentUserState.username);
               
               // Only update if different to avoid re-renders
               if (JSON.stringify(serverNotifs) !== JSON.stringify(notifications)) {
-                  // Merge logic: Keep local unread if they are newer? 
-                  // For simplicity, let's trust the server sync which happens frequently.
-                  // However, since we now add notifications locally first, we should be careful not to overwrite
-                  // pending pushes. 
-                  // Ideally, userService handles the merging. 
                   setNotifications(serverNotifs);
-                  
-                  // Show toast for new unread from server (e.g. admin pushed message)
                   const newUnread = serverNotifs.filter(n => !n.read && n.timestamp > (Date.now() - 10000));
-                  // Avoid duplicating toasts for things we just triggered locally
-                  // Use a simple check or ID tracking if needed. For now, rely on timestamp.
               }
           }
       }, 5000); // Check every 5 seconds
@@ -524,7 +520,6 @@ const App: React.FC = () => {
     }, 5000);
 
     // 2. Add to Notification History (Persistent)
-    // Only if authenticated, to ensure it attaches to a user
     if (user.isAuthenticated) {
         const newNotification: AppNotification = {
             id: uuidv4(),
@@ -544,10 +539,6 @@ const App: React.FC = () => {
         setUser(updatedUser);
         userRef.current = updatedUser; // Update Ref
         localStorage.setItem('ue_current_user', JSON.stringify(updatedUser));
-        
-        // Note: The periodic sync (every 5s) or action-triggered syncs in userService
-        // will eventually push this to the cloud. 
-        // We don't force push here to avoid network spam on every toast.
     }
   };
 
@@ -557,7 +548,6 @@ const App: React.FC = () => {
   }
 
   const handleLoginSuccess = (registeredUser: RegisteredUser) => {
-      // Fix: Added missing modelTier property assignment from registeredUser
       const appUser: User = {
           username: registeredUser.username,
           email: registeredUser.email,
@@ -569,7 +559,7 @@ const App: React.FC = () => {
           credits: registeredUser.credits,
           sessionId: registeredUser.currentSessionId, // Store current session
           telegramChatId: registeredUser.telegramChatId,
-          createdAt: registeredUser.createdAt // Added createdAt property
+          createdAt: registeredUser.createdAt
       };
       setUser(appUser);
       localStorage.setItem('ue_current_user', JSON.stringify(appUser));
@@ -577,7 +567,6 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-      // Fix: Added missing modelTier property to guest user
       setUser({ 
           username: 'Guest', 
           email: '',
@@ -614,15 +603,8 @@ const App: React.FC = () => {
           const updatedUser = { ...user, notifications: updated };
           setUser(updatedUser);
           localStorage.setItem('ue_current_user', JSON.stringify(updatedUser));
-          // Note: Actual deletion from cloud isn't strictly necessary for notifications history, 
-          // but could be implemented in userService if needed. For now, local cleaning is good.
       }
   }
-
-  // PERSISTENCE LOGIC:
-  // Instead of unmounting modules, we hide/show them using CSS based on activeModule.
-  // This preserves state. Home, AdminPanel, and Library are exceptions or can be kept mounted too.
-  // For better performance, we might want to unmount Home or Admin, but creation modules MUST stay mounted.
 
   return (
     <Layout 
@@ -637,12 +619,6 @@ const App: React.FC = () => {
         onDeleteNotification={handleDeleteNotification}
         onOpenLogin={() => setIsAuthModalOpen(true)}
     >
-      {/* 
-         PERSISTENT MODULE RENDERER 
-         All creation modules are mounted once and hidden/shown.
-         Global processing state is passed down to all.
-      */}
-      
       {/* HOME (Re-mounts to refresh stats) */}
       {activeModule === ModuleType.HOME && (
           <Home onNavigate={setActiveModule} currentUser={user} />
@@ -656,7 +632,7 @@ const App: React.FC = () => {
       {/* LIBRARY (Re-mounts or handles visibility internally via isActive prop) */}
       <div style={{ display: activeModule === ModuleType.LIBRARY ? 'block' : 'none', height: '100%' }}>
           <Library 
-            onNavigate={(m, d) => { setActiveModule(m); /* Handle data passing logic in future */ }} 
+            onNavigate={(m, d) => { setActiveModule(m); }} 
             addToast={addToast} 
             isActive={activeModule === ModuleType.LIBRARY}
           />

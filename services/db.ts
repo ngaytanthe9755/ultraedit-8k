@@ -39,30 +39,48 @@ export const initDB = (): Promise<IDBDatabase> => {
   });
 };
 
+/**
+ * LƯU MỤC:
+ * Nếu đã liên kết Cloud -> Chỉ lưu Cloud.
+ * Nếu chưa liên kết -> Chỉ lưu Local.
+ */
 export const saveItem = async (item: LibraryItem): Promise<void> => {
+  if (driveService.isLinked()) {
+      await driveService.syncItem(item.id, item);
+      notifyLibraryChange();
+      return;
+  }
+
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_LIBRARY], 'readwrite');
     const store = transaction.objectStore(STORE_LIBRARY);
-    const request = store.put(item);
+    store.put(item);
 
     transaction.oncomplete = () => {
-        // Background sync to Drive if configured
-        if (driveService.isConfigured()) {
-            driveService.syncItem(item.id, item).catch(err => console.warn("Cloud sync deferred", err));
-        }
-
-        setTimeout(() => {
-            notifyLibraryChange();
-        }, 200);
+        notifyLibraryChange();
         resolve();
     };
-
     transaction.onerror = () => reject(transaction.error);
   });
 };
 
+/**
+ * LẤY TOÀN BỘ:
+ * Nếu đã liên kết -> Lấy từ Cloud.
+ * Nếu chưa -> Lấy từ Local.
+ */
 export const getAllItems = async (): Promise<LibraryItem[]> => {
+  if (driveService.isLinked()) {
+      try {
+          const cloudItems = await driveService.fetchAllFromCloud();
+          // Lọc ra các LibraryItem hợp lệ
+          return cloudItems.filter(i => i.id && i.type);
+      } catch (e) {
+          console.warn("[DB] Cloud fetch failed, falling back to local for viewing only.");
+      }
+  }
+
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_LIBRARY], 'readonly');
@@ -84,73 +102,71 @@ export const getAllItems = async (): Promise<LibraryItem[]> => {
   });
 };
 
+/**
+ * XÓA MỤC:
+ * Dựa trên trạng thái liên kết hiện tại.
+ */
 export const deleteItem = async (id: string): Promise<void> => {
+  if (driveService.isLinked()) {
+      await driveService.deleteItem(id);
+      notifyLibraryChange();
+      return;
+  }
+
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_LIBRARY], 'readwrite');
     const store = transaction.objectStore(STORE_LIBRARY);
     store.delete(id);
-    
     transaction.oncomplete = () => {
-        if (driveService.isConfigured()) {
-            driveService.deleteItem(id).catch(err => console.warn("Cloud delete deferred", err));
-        }
-        setTimeout(() => {
-            notifyLibraryChange();
-        }, 200);
+        notifyLibraryChange();
         resolve();
     };
-    
     transaction.onerror = () => reject(transaction.error);
   });
 };
 
 export const deleteItems = async (ids: string[]): Promise<void> => {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_LIBRARY], 'readwrite');
-        const store = transaction.objectStore(STORE_LIBRARY);
-        
-        ids.forEach(id => {
-            store.delete(id);
-            if (driveService.isConfigured()) {
-                driveService.deleteItem(id).catch(() => {});
-            }
-        });
-        
-        transaction.oncomplete = () => {
-            setTimeout(() => {
-                notifyLibraryChange();
-            }, 200);
-            resolve();
-        };
-        
-        transaction.onerror = () => reject(transaction.error);
-    });
+    for (const id of ids) {
+        await deleteItem(id);
+    }
 };
 
+/**
+ * LƯU NHÂN VẬT:
+ * Tuân thủ quy tắc Cloud vs Local.
+ */
 export const saveCharacter = async (char: SavedCharacter): Promise<void> => {
+  if (driveService.isLinked()) {
+      await driveService.syncItem(`char_${char.id}`, char);
+      notifyLibraryChange();
+      return;
+  }
+
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_CHARACTERS], 'readwrite');
     const store = transaction.objectStore(STORE_CHARACTERS);
     store.put(char);
-    
     transaction.oncomplete = () => {
-        if (driveService.isConfigured()) {
-            driveService.syncItem(`char_${char.id}`, char).catch(() => {});
-        }
-        setTimeout(() => {
-            notifyLibraryChange();
-        }, 200);
+        notifyLibraryChange();
         resolve();
     };
-    
     transaction.onerror = () => reject(transaction.error);
   });
 }
 
 export const getAllCharacters = async (): Promise<SavedCharacter[]> => {
+  if (driveService.isLinked()) {
+      try {
+          const allCloud = await driveService.fetchAllFromCloud();
+          // Nhận diện nhân vật qua ID prefix hoặc cấu trúc
+          return allCloud.filter(i => i.name && i.base64Data);
+      } catch (e) {
+          return [];
+      }
+  }
+
   const db = await initDB();
   return new Promise((resolve, reject) => {
     if (!db.objectStoreNames.contains(STORE_CHARACTERS)) {
@@ -172,18 +188,31 @@ export const exportDatabase = async (): Promise<string> => {
 };
 
 export const importDatabase = async (jsonString: string): Promise<{ itemsCount: number; charsCount: number }> => {
+    const data = JSON.parse(jsonString);
+    let itemsCount = 0, charsCount = 0;
+
+    if (driveService.isLinked()) {
+        // Import thẳng lên Cloud
+        if (Array.isArray(data.items)) {
+            for (const item of data.items) { await driveService.syncItem(item.id, item); itemsCount++; }
+        }
+        if (Array.isArray(data.characters)) {
+            for (const char of data.characters) { await driveService.syncItem(`char_${char.id}`, char); charsCount++; }
+        }
+        notifyLibraryChange();
+        return { itemsCount, charsCount };
+    }
+
     const db = await initDB();
     return new Promise((resolve, reject) => {
         try {
-            const data = JSON.parse(jsonString);
             const transaction = db.transaction([STORE_LIBRARY, STORE_CHARACTERS], 'readwrite');
             const itemStore = transaction.objectStore(STORE_LIBRARY);
             const charStore = transaction.objectStore(STORE_CHARACTERS);
-            let itemsCount = 0, charsCount = 0;
             if (Array.isArray(data.items)) data.items.forEach((item: any) => { itemStore.put(item); itemsCount++; });
             if (Array.isArray(data.characters)) data.characters.forEach((char: any) => { charStore.put(char); charsCount++; });
             transaction.oncomplete = () => {
-                setTimeout(() => notifyLibraryChange(), 200);
+                notifyLibraryChange();
                 resolve({ itemsCount, charsCount });
             };
             transaction.onerror = () => reject(transaction.error);
