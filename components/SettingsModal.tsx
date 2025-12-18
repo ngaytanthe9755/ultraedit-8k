@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Cloud, Download, Upload, HardDrive, RefreshCw, X, UserCog, Save, User as UserIcon, MessageCircle, Lock, Loader2, ShieldCheck, Info, LogIn, CloudDownload, AlertTriangle, Copy, Check, ExternalLink, RotateCcw, ShieldAlert, Cpu, Sparkles, Key, CreditCard, ChevronDown, ChevronUp } from 'lucide-react';
+import { Cloud, Download, Upload, HardDrive, RefreshCw, X, UserCog, Save, User as UserIcon, MessageCircle, Lock, Loader2, ShieldCheck, Info, LogIn, CloudDownload, AlertTriangle, Copy, Check, ExternalLink, RotateCcw, ShieldAlert, Cpu, Sparkles, Key, CreditCard, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { exportDatabase, importDatabase, saveItem, saveCharacter } from '../services/db';
 import { driveService } from '../services/googleDriveService';
 import { User } from '../types';
@@ -18,6 +18,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [showFixGuide, setShowFixGuide] = useState(false);
+    const [show403Guide, setShow403Guide] = useState(false);
     
     // Google Drive States
     const [driveClientId, setDriveClientId] = useState('');
@@ -168,12 +169,37 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
 
                     {activeTab === 'cloud' && (
                         <div className="space-y-6">
+                            {/* Hướng dẫn sửa lỗi 403 Nổi bật */}
+                            <div className="bg-red-950/30 border border-red-500/30 rounded-xl p-4 space-y-3">
+                                <div 
+                                    className="flex justify-between items-center cursor-pointer"
+                                    onClick={() => setShow403Guide(!show403Guide)}
+                                >
+                                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold uppercase">
+                                        <AlertCircle size={16}/> Fix Lỗi 403: access_denied
+                                    </div>
+                                    {show403Guide ? <ChevronUp size={16} className="text-red-400"/> : <ChevronDown size={16} className="text-red-400"/>}
+                                </div>
+                                
+                                {show403Guide && (
+                                    <div className="text-[11px] text-zinc-300 space-y-3 pt-2 border-t border-red-500/10 animate-in fade-in">
+                                        <p className="font-bold text-red-300">Nguyên nhân: Ứng dụng Google Cloud của bạn đang ở chế độ "Testing" nên chặn người lạ.</p>
+                                        <div className="space-y-2">
+                                            <p><b>Bước 1:</b> Truy cập <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" className="text-blue-400 underline inline-flex items-center gap-0.5">OAuth Consent Screen <ExternalLink size={10}/></a></p>
+                                            <p><b>Bước 2:</b> Kéo xuống mục <b>"Test users"</b> -> Bấm <b>"+ ADD USERS"</b>.</p>
+                                            <p><b>Bước 3:</b> Nhập chính xác địa chỉ Gmail bạn dùng để đăng nhập -> Bấm <b>SAVE</b>.</p>
+                                            <p className="text-zinc-500 italic">Hoặc bấm nút <b>"PUBLISH APP"</b> ở trên cùng để cho phép mọi Gmail (Lưu ý: Google sẽ báo "App unverified", bạn chỉ cần bấm Advanced -> Go to ... là được).</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {isSandboxed && (
-                                <div className="bg-red-900/20 border border-red-500/50 rounded-xl p-4 flex gap-3 items-start animate-pulse">
-                                    <ShieldAlert size={24} className="text-red-500 shrink-0" />
-                                    <div className="text-xs text-red-200 leading-relaxed">
-                                        <p className="font-bold mb-1 text-red-400">Đang chạy trong chế độ Sandbox!</p>
-                                        Google OAuth thường bị chặn trong cửa sổ Preview. Để dùng Cloud, hãy truy cập trực tiếp domain của bạn.
+                                <div className="bg-orange-900/20 border border-orange-500/50 rounded-xl p-4 flex gap-3 items-start">
+                                    <ShieldAlert size={24} className="text-orange-500 shrink-0" />
+                                    <div className="text-xs text-orange-200 leading-relaxed">
+                                        <p className="font-bold mb-1 text-orange-400">Cảnh báo: Đang chạy Sandbox!</p>
+                                        Google không cho phép mở cửa sổ đăng nhập bên trong iframe. Vui lòng truy cập trực tiếp bằng trình duyệt.
                                     </div>
                                 </div>
                             )}
@@ -186,13 +212,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                                     </div>
                                     {showFixGuide && (
                                         <div className="mt-3 text-[10px] text-zinc-400 space-y-2 border-t border-blue-500/10 pt-2 animate-in fade-in">
-                                            <p>Nếu bạn gặp lỗi 400 khi bấm kết nối, hãy kiểm tra lại cấu hình trong <b>Google Cloud Console</b>:</p>
+                                            <p>Nếu gặp lỗi 400, kiểm tra cấu hình trong <b>Google Cloud Console</b>:</p>
                                             <ul className="list-disc pl-4 space-y-1">
                                                 <li>Vào mục <b>APIs & Services > Credentials</b>.</li>
-                                                <li>Mở <b>OAuth 2.0 Client ID</b> bạn đang sử dụng.</li>
-                                                <li>Tại mục <b>Authorized JavaScript origins</b>, thêm:<br/><code>https://www.ultraedit8k.shop</code></li>
-                                                <li>Tại mục <b>Authorized redirect URIs</b>, thêm:<br/><code>https://www.ultraedit8k.shop</code></li>
-                                                <li>Bấm <b>SAVE</b> và đợi 5-10 phút để Google cập nhật cache.</li>
+                                                <li>Mở <b>OAuth 2.0 Client ID</b> đang sử dụng.</li>
+                                                <li>Mục <b>Authorized JavaScript origins</b>, thêm:<br/><code>https://www.ultraedit8k.shop</code></li>
+                                                <li>Mục <b>Authorized redirect URIs</b>, thêm:<br/><code>https://www.ultraedit8k.shop</code></li>
                                             </ul>
                                         </div>
                                     )}
