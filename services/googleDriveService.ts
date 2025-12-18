@@ -133,8 +133,16 @@ class GoogleDriveService {
                                     return;
                                 }
                                 console.log("[Drive] Đăng nhập Cloud thành công.");
-                                this.config!.accessToken = resp.access_token;
+                                // Lưu token và config
+                                this.config = {
+                                    ...this.config!,
+                                    accessToken: resp.access_token
+                                };
                                 localStorage.setItem('ue_drive_config', JSON.stringify(this.config));
+                                
+                                // Set token vào gapi
+                                (window as any).gapi.client.setToken({ access_token: resp.access_token });
+                                
                                 this.initialized = true;
                                 window.dispatchEvent(new Event('drive_linked'));
                             },
@@ -169,6 +177,7 @@ class GoogleDriveService {
         }
         
         try {
+            // Luôn yêu cầu consent để đảm bảo cấp mới token nếu cần
             this.tokenClient.requestAccessToken({ prompt: 'consent' });
         } catch (e: any) {
             console.error("[Drive] Popup Error:", e);
@@ -181,7 +190,11 @@ class GoogleDriveService {
         const gapi = (window as any).gapi;
         
         if (!gapi?.client?.drive) {
-            await this.initialize();
+            try {
+                await this.initialize();
+            } catch (e) {
+                return null;
+            }
         }
 
         try {
