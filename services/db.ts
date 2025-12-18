@@ -1,5 +1,6 @@
 
 import { LibraryItem, SavedCharacter } from '../types';
+import { driveService } from './googleDriveService'; // Import Service
 
 const DB_NAME = 'creative_studio_db';
 const STORE_LIBRARY = 'library_items';
@@ -8,7 +9,6 @@ const DB_VERSION = 2;
 
 // --- EVENT BUS HELPER ---
 const notifyLibraryChange = () => {
-    // Dispatch event to window so Library component can reload
     console.log("[DB] Transaction committed. Dispatching 'library_updated' event.");
     window.dispatchEvent(new Event('library_updated'));
 };
@@ -49,13 +49,19 @@ export const saveItem = async (item: LibraryItem): Promise<void> => {
     const store = transaction.objectStore(STORE_LIBRARY);
     const request = store.put(item);
 
-    // IMPORTANT: Wait for transaction to complete
     transaction.oncomplete = () => {
-        // Increased delay to 200ms to ensure large Base64 data is fully flushed 
-        // to disk before any UI tries to read it back.
+        // Fire event locally
         setTimeout(() => {
             notifyLibraryChange();
         }, 200);
+        
+        // --- GOOGLE DRIVE AUTO-SYNC HOOK ---
+        // Fire and forget upload to avoid blocking UI
+        if (driveService.isConfigured() && driveService.isAuthenticated()) {
+            console.log("[DB] Triggering background Drive Upload...");
+            driveService.uploadItem(item).catch(err => console.warn("Background Drive Upload failed", err));
+        }
+        
         resolve();
     };
 
@@ -103,6 +109,12 @@ export const deleteItem = async (id: string): Promise<void> => {
         setTimeout(() => {
             notifyLibraryChange();
         }, 200);
+        
+        // --- GOOGLE DRIVE DELETE HOOK ---
+        if (driveService.isConfigured() && driveService.isAuthenticated()) {
+             driveService.deleteItem(id).catch(err => console.warn("Background Drive Delete failed", err));
+        }
+
         resolve();
     };
     
@@ -124,6 +136,12 @@ export const deleteItems = async (ids: string[]): Promise<void> => {
             setTimeout(() => {
                 notifyLibraryChange();
             }, 200);
+            
+            // Batch delete from Drive? For now, simple loop
+            if (driveService.isConfigured() && driveService.isAuthenticated()) {
+                ids.forEach(id => driveService.deleteItem(id).catch(err => console.warn("Background Drive Delete failed", err)));
+            }
+
             resolve();
         };
         
@@ -148,6 +166,9 @@ export const saveCharacter = async (char: SavedCharacter): Promise<void> => {
         setTimeout(() => {
             notifyLibraryChange();
         }, 200);
+        // Characters are usually tied to LibraryItems in this app structure, 
+        // so explicit sync might be redundant if the LibraryItem is saved.
+        // But if needed, add Drive hook here.
         resolve();
     };
     

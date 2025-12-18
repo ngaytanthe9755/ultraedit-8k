@@ -5,7 +5,7 @@ import {
     Layout, FileText, Video, Award, DollarSign, BookOpen, 
     Rocket, ChevronRight, Play, Copy, Loader2, RefreshCw, BarChart3, Sparkles, Globe, MapPin, Briefcase, Coins, Users, Plus, Settings, List, Clock, Hash, Youtube, Facebook, Instagram, Smartphone, MessageSquare, Menu, X, Edit2, Trash2, CheckSquare, Flame, ExternalLink, MousePointerClick, Flag, ShieldCheck, SearchCheck, AlertTriangle, ScanEye, Mic, Clapperboard, Download, Image as ImageIcon, MonitorPlay, Zap, Film, Save, RefreshCcw, GraduationCap, Lock, Unlock, LineChart, Wand2, Info, Eye, AtSign, MousePointer
 } from 'lucide-react';
-import { generateChannelStrategy, generateDailyChannelTask, generateSpecificChannelDetail, generateStoryScenes, generateThumbnailSuggestions, generateVeoSceneImage } from '../services/geminiService';
+import { generateChannelStrategy, generateDailyChannelTask, generateSpecificChannelDetail, generateQuickScript, generateVeoSceneImage } from '../services/geminiService';
 import { saveItem, getAllItems, deleteItem } from '../services/db';
 import { v4 as uuidv4 } from 'uuid';
 import { User, ModuleType, LibraryItem, VideoScene } from '../types';
@@ -208,11 +208,11 @@ interface AuditResult {
 }
 
 interface ScriptStudioState {
-    mode: 'idle' | 'planning' | 'filming' | 'review';
-    scenes: VideoScene[];
-    thumbnails: any[];
-    endingShot: string;
-    progress: number;
+    mode: 'idle' | 'scripting' | 'production' | 'review';
+    script: any[]; // Scenes
+    isLoadingScript: boolean;
+    isGeneratingImage: boolean;
+    currentImageIndex: number;
 }
 
 const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, onNavigate }) => {
@@ -249,12 +249,10 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
     const [isAuditing, setIsAuditing] = useState(false);
     const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
 
-    // Internal Script Studio State
+    // Internal Script Studio State (Rapid Production)
     const [studioState, setStudioState] = useState<ScriptStudioState>({
-        mode: 'idle', scenes: [], thumbnails: [], endingShot: '', progress: 0
+        mode: 'idle', script: [], isLoadingScript: false, isGeneratingImage: false, currentImageIndex: -1
     });
-    const [isGeneratingSceneImage, setIsGeneratingSceneImage] = useState(false);
-    const [currentProcessingIndex, setCurrentProcessingIndex] = useState<number>(-1);
 
     // --- EFFECTS ---
     useEffect(() => { loadChannels(); }, []);
@@ -270,7 +268,7 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
                     
                     setCompletedTasks(channel.meta?.completedTasks || []);
                     setAuditResult(null);
-                    setStudioState({ mode: 'idle', scenes: [], thumbnails: [], endingShot: '', progress: 0 }); 
+                    setStudioState({ mode: 'idle', script: [], isLoadingScript: false, isGeneratingImage: false, currentImageIndex: -1 }); 
                     setSelectedTask(null); // Reset foundation task selection
                     setTaskData('');
                     
@@ -300,21 +298,6 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
         if (plans.length > 0 && !selectedChannelId && !isCreating) {
             setSelectedChannelId(plans[0].id);
         }
-    };
-
-    // --- MARKET LOGIC HELPERS ---
-    const getMarketContext = (marketKey: string) => {
-        const m = MARKETS[marketKey] || MARKETS['Vietnam'];
-        return `
-            TARGET MARKET: ${m.label}.
-            LANGUAGE: ${m.lang}.
-            CULTURAL VIBE: ${m.culture}.
-            LOCAL TRENDS: ${m.trends}.
-            VOICE TONE: ${m.voice}.
-            TIMEZONE: ${m.timezone}.
-            BEST POSTING HOURS: ${m.bestHours}.
-            IMPORTANT: Ensure all content resonates deeply with local viewers of ${marketKey}.
-        `;
     };
 
     // --- 1. CHANNEL CREATION (ZERO TO HERO) ---
@@ -376,7 +359,7 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
         setIsLoading(true);
         try {
             // Updated service call to accept Phase context
-            const task = await generateDailyChannelTask(plan, doneTasks); // Ideally pass 'phase' here if service supports
+            const task = await generateDailyChannelTask(plan, doneTasks, phase); // Use phase logic
             setDailyTask(task);
             
             setChannels(prev => {
@@ -469,19 +452,97 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
         }
     }
 
-    // --- 3. SCRIPT STUDIO LOGIC (Unchanged but integrated) ---
-    // ... (Keep existing studio logic: handleStudioPlan, handleStudioFilmScene, handleStudioAssets) ...
-    // Placeholder to keep code concise, assume reused from previous turn logic.
-    const handleStudioPlan = async () => {
-        // ... (Logic from previous step)
-        setStudioState(prev => ({ ...prev, mode: 'planning', progress: 10 }));
-        // Mock success for UI demo
-        setTimeout(() => {
-             setStudioState(prev => ({ ...prev, mode: 'filming', scenes: [{sceneNumber:1, visualPrompt:"A cat", voiceover:"Meow"}], progress: 50 }));
-        }, 1000);
+    const handleSaveTaskDataToPlan = async (type: string) => {
+        if (!activePlan || !selectedChannelId || !taskData) return;
+        
+        let updateKey = '';
+        let updateVal: any = taskData;
+
+        if (type === 'keywords') updateKey = 'keywords';
+        else if (type === 'bio') updateKey = 'bio';
+        else if (type === 'description') updateKey = 'description';
+        else return;
+
+        // Clean formatting if it's keywords
+        if (type === 'keywords') {
+            updateVal = taskData.split(',').map(k => k.trim());
+        }
+
+        const newIdentity = { ...activePlan.channelIdentity, [updateKey]: updateVal };
+        const newPlan = { ...activePlan, channelIdentity: newIdentity };
+        
+        // Update DB
+        const channel = channels.find(c => c.id === selectedChannelId);
+        if (channel) {
+            const updatedItem = { ...channel, textContent: JSON.stringify(newPlan) };
+            await saveItem(updatedItem);
+            setChannels(prev => prev.map(c => c.id === selectedChannelId ? updatedItem : c));
+            setActivePlan(newPlan); // Update local state
+            addToast("Đã lưu", "Thông tin đã được cập nhật vào Cấu hình Kênh.", "success");
+        }
+    }
+
+    // --- 3. RAPID STUDIO LOGIC ---
+    const handleGenerateStudioScript = async () => {
+        if (!dailyTask || !dailyTask.videoConcept) return;
+        setStudioState(prev => ({ ...prev, isLoadingScript: true, mode: 'scripting' }));
+        try {
+            const script = await generateQuickScript(
+                dailyTask.videoConcept.title, 
+                dailyTask.videoConcept.hook, 
+                activePlan.product, 
+                activePlan.targetMarket
+            );
+            setStudioState(prev => ({ ...prev, script: script, isLoadingScript: false, mode: 'production' }));
+        } catch (e) {
+            addToast("Lỗi", "Không thể tạo kịch bản.", "error");
+            setStudioState(prev => ({ ...prev, isLoadingScript: false }));
+        }
     };
-    const handleStudioFilmScene = async (index: number) => {}; // Implementation same as previous
-    const handleStudioAssets = async () => {}; // Implementation same as previous
+
+    const handleRenderScene = async (index: number) => {
+        if (!studioState.script[index]) return;
+        setStudioState(prev => ({ ...prev, isGeneratingImage: true, currentImageIndex: index }));
+        try {
+            const scene = studioState.script[index];
+            // Simple image generation for now, using Veo generator for consistency
+            const b64 = await generateVeoSceneImage(
+                `${scene.visualPrompt}. Style: Cinematic/Viral.`, 
+                null, null, "9:16", "Shorts", index, null, "2K"
+            );
+            const fullImg = `data:image/png;base64,${b64}`;
+            
+            const newScript = [...studioState.script];
+            newScript[index].generatedImage = fullImg;
+            setStudioState(prev => ({ ...prev, script: newScript, isGeneratingImage: false, currentImageIndex: -1 }));
+            
+            // Save to Library for later use
+            saveItem({
+                id: uuidv4(),
+                type: 'image',
+                prompt: `Scene ${index+1}: ${dailyTask.videoConcept?.title}`,
+                createdAt: Date.now(),
+                base64Data: fullImg,
+                meta: { sourceModule: ModuleType.CHANNEL_BUILDER, task: dailyTask.taskTitle }
+            });
+
+        } catch (e) {
+            addToast("Lỗi", "Không thể tạo ảnh.", "error");
+            setStudioState(prev => ({ ...prev, isGeneratingImage: false, currentImageIndex: -1 }));
+        }
+    };
+
+    const handleDownloadAllAssets = () => {
+        studioState.script.forEach((scene, idx) => {
+            if (scene.generatedImage) {
+                const link = document.createElement('a');
+                link.href = scene.generatedImage;
+                link.download = `Scene-${idx+1}.png`;
+                link.click();
+            }
+        });
+        addToast("Tải xuống", "Đang tải xuống các scene...", "info");
+    };
 
     // --- RENDER HELPERS ---
     const renderPhaseBadge = (phaseId: number) => {
@@ -593,6 +654,9 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
                                 {taskData ? (
                                     <div className="relative group">
                                         <div className="absolute top-2 right-2 flex gap-1">
+                                            {(guide.aiType === 'keywords' || guide.aiType === 'bio' || guide.aiType === 'description') && (
+                                                <button onClick={() => handleSaveTaskDataToPlan(guide.aiType!)} className="p-1.5 bg-green-600 hover:bg-green-500 text-white rounded shadow-lg" title="Lưu vào cấu hình kênh"><Save size={12}/></button>
+                                            )}
                                             <button onClick={() => { navigator.clipboard.writeText(taskData); addToast("Copy", "Đã sao chép!", "success"); }} className="p-1.5 bg-black/50 text-zinc-300 hover:text-white rounded hover:bg-black/70 backdrop-blur"><Copy size={12}/></button>
                                         </div>
                                         <textarea 
@@ -677,7 +741,7 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-8">
                     {isCreating ? (
-                        /* --- CREATION FORM (UNCHANGED BUT INTEGRATED) --- */
+                        /* --- CREATION FORM --- */
                         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in zoom-in">
                             <div className="flex justify-between items-center"><h2 className="text-3xl font-black text-white flex items-center gap-3"><Rocket className="text-indigo-500" size={32}/> Khởi tạo Kênh Mới</h2><button onClick={() => setIsCreating(false)} className="p-2 hover:bg-white/10 rounded-full text-zinc-400 hover:text-white"><X size={24}/></button></div>
                             <div className="bg-zinc-900/60 border border-white/10 rounded-3xl p-6 shadow-2xl backdrop-blur-xl">
@@ -729,7 +793,7 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
                                 <button onClick={() => setActiveTab('daily')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'daily' || activeTab === 'studio' ? 'bg-indigo-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'}`}><Calendar size={16} className="inline mr-2"/> Daily Ops</button>
                             </div>
 
-                            {/* TAB: ROADMAP (Overview) */}
+                            {/* TAB: ROADMAP */}
                             {activeTab === 'roadmap' && (
                                 <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -787,7 +851,7 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
                                 </div>
                             )}
 
-                            {/* TAB: FOUNDATION (Setup Checklist) */}
+                            {/* TAB: FOUNDATION */}
                             {activeTab === 'foundation' && (
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-right-4">
                                     <div className="lg:col-span-2 space-y-6">
@@ -802,11 +866,11 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
                                         <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-6">
                                             <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Wand2 size={18} className="text-purple-400"/> AI Tools (Setup)</h3>
                                             <div className="space-y-3">
-                                                <button className="w-full text-left p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-purple-500 transition-colors group">
+                                                <button onClick={() => { setSelectedTask(null); handleGenerateTaskData('description'); setSelectedTask('upload_default'); }} className="w-full text-left p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-purple-500 transition-colors group">
                                                     <div className="text-xs font-bold text-white group-hover:text-purple-400">Generate Channel Description</div>
                                                     <div className="text-[10px] text-zinc-500">Tạo mô tả chuẩn SEO cho phần About.</div>
                                                 </button>
-                                                <button className="w-full text-left p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-purple-500 transition-colors group">
+                                                <button onClick={() => { setSelectedTask(null); handleGenerateTaskData('keywords'); setSelectedTask('keyword'); }} className="w-full text-left p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-purple-500 transition-colors group">
                                                     <div className="text-xs font-bold text-white group-hover:text-purple-400">Generate Keywords</div>
                                                     <div className="text-[10px] text-zinc-500">Bộ từ khóa kênh (Channel Tags) tối ưu.</div>
                                                 </button>
@@ -821,7 +885,7 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
                                 </div>
                             )}
 
-                            {/* TAB: STRATEGY (Content Plan) */}
+                            {/* TAB: STRATEGY */}
                             {activeTab === 'strategy' && (
                                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -899,13 +963,13 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
                                                     <div className="bg-purple-900/10 rounded-xl p-5 border border-purple-500/20 mb-6">
                                                         <h4 className="text-purple-300 font-bold text-sm mb-2 flex items-center gap-2"><Video size={14}/> Ý tưởng Video (Market-Fit)</h4>
                                                         <div className="space-y-1 text-sm"><div className="text-white font-bold">{dailyTask.videoConcept.title}</div><div className="text-zinc-400 italic">Hook: "{dailyTask.videoConcept.hook}"</div></div>
-                                                        <button onClick={() => { setActiveTab('studio'); handleStudioPlan(); }} className="mt-4 w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-lg"><Clapperboard size={16}/> Triển khai Kịch bản Chi tiết (Studio Mode)</button>
+                                                        <button onClick={() => { setActiveTab('studio'); handleGenerateStudioScript(); }} className="mt-4 w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-lg"><Clapperboard size={16}/> Sản xuất nhanh (Rapid Studio)</button>
                                                     </div>
                                                 )}
                                                 
                                                 <div className="flex gap-3">
                                                     <button onClick={() => fetchDailyTask(activePlan, completedTasks, selectedChannelId!, activePlan.targetMarket, currentPhase)} disabled={isLoading} className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold flex items-center justify-center gap-2"><RefreshCw size={16} className={isLoading?"animate-spin":""}/> Đổi nhiệm vụ</button>
-                                                    <button className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"><CheckCircle2 size={16}/> Hoàn thành</button>
+                                                    <button onClick={() => handleTaskComplete(uuidv4())} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"><CheckCircle2 size={16}/> Hoàn thành</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -916,8 +980,52 @@ const ChannelBuilder: React.FC<ChannelBuilderProps> = ({ addToast, currentUser, 
                                     {/* INTERNAL SCRIPT STUDIO */}
                                     {activeTab === 'studio' && (
                                         <div className="animate-in slide-in-from-right-10 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-                                            {/* Reuse Studio UI from previous version */}
-                                            <div className="text-center text-zinc-500 p-10">Studio Interface Loaded (See previous implementation for full code)</div>
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Clapperboard className="text-red-500"/> Rapid Studio</h3>
+                                                <span className="text-xs text-zinc-500">Quick production for Short-form content</span>
+                                            </div>
+                                            
+                                            {studioState.isLoadingScript ? (
+                                                <div className="py-20 flex flex-col items-center gap-4 text-zinc-500">
+                                                    <Loader2 size={32} className="animate-spin text-indigo-500"/>
+                                                    <p>Đang viết kịch bản chi tiết từ ý tưởng...</p>
+                                                </div>
+                                            ) : studioState.script.length > 0 ? (
+                                                <div className="space-y-4">
+                                                    {studioState.script.map((scene: any, idx: number) => (
+                                                        <div key={idx} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex gap-4">
+                                                            <div className="w-24 h-32 bg-black rounded-lg flex items-center justify-center relative overflow-hidden shrink-0 border border-zinc-800">
+                                                                {scene.generatedImage ? (
+                                                                    <img src={scene.generatedImage} className="w-full h-full object-cover"/>
+                                                                ) : studioState.isGeneratingImage && studioState.currentImageIndex === idx ? (
+                                                                    <Loader2 className="animate-spin text-indigo-500"/>
+                                                                ) : (
+                                                                    <button onClick={() => handleRenderScene(idx)} className="text-zinc-600 hover:text-white flex flex-col items-center gap-1">
+                                                                        <ImageIcon size={20}/>
+                                                                        <span className="text-[9px]">Tạo ảnh</span>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex-1 space-y-2">
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-xs font-bold text-white bg-zinc-800 px-2 py-0.5 rounded">Scene {idx+1}</span>
+                                                                    {scene.generatedImage && <span className="text-xs text-green-500 flex items-center gap-1"><CheckCircle2 size={12}/> Ready</span>}
+                                                                </div>
+                                                                <p className="text-xs text-zinc-300 bg-zinc-900 p-2 rounded border border-zinc-800">{scene.visualPrompt}</p>
+                                                                <p className="text-xs text-indigo-300 italic">"{scene.dialogue}"</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+                                                        <button onClick={handleDownloadAllAssets} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-bold flex items-center gap-2"><Download size={16}/> Tải tất cả tài nguyên</button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-20 text-zinc-500">
+                                                    <Film size={48} className="mx-auto mb-4 opacity-30"/>
+                                                    <p>Chưa có kịch bản. Hãy bấm nút "Sản xuất nhanh" ở trên.</p>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
