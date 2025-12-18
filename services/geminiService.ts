@@ -1,6 +1,8 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+/* Fresh instantiation helper to ensure latest configuration/API key is used as per guidelines */
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- Helper Functions ---
 
@@ -20,10 +22,13 @@ async function getJson(response: any): Promise<any> {
 
 export const enhancePrompt = async (prompt: string): Promise<string> => {
     try {
+        const ai = getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            /* Updated model to gemini-3-flash-preview for Basic Text Tasks */
+            model: 'gemini-3-flash-preview',
             contents: `Enhance this image generation prompt to be more detailed, descriptive, and artistic. Keep the core meaning but add lighting, texture, and style keywords. \n\nOriginal: "${prompt}"\n\nEnhanced:`,
         });
+        /* Guideline compliant: text property access */
         return response.text || prompt;
     } catch (e) {
         console.error(e);
@@ -33,8 +38,10 @@ export const enhancePrompt = async (prompt: string): Promise<string> => {
 
 export const validateImageSafety = async (base64Image: string): Promise<{ safe: boolean; reason?: string }> => {
     try {
+        const ai = getAI();
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            /* Updated model to gemini-3-flash-preview */
+            model: 'gemini-3-flash-preview',
             contents: {
                 parts: [
                     { inlineData: { mimeType: 'image/png', data: base64Image } },
@@ -59,7 +66,8 @@ export const generateImage = async (
     negativePrompt?: string
 ): Promise<string> => {
     // Model selection based on task/quality
-    const model = (quality === '4K' || quality === '8K' || refImageB64) 
+    /* Models updated according to guidelines: Upgrade to pro for high-res or references */
+    const model = (quality === '2K' || quality === '4K' || quality === '8K' || refImageB64) 
         ? 'gemini-3-pro-image-preview' // Better for high quality & editing
         : 'gemini-2.5-flash-image'; // Faster
 
@@ -83,17 +91,21 @@ export const generateImage = async (
     const config: any = {
         imageConfig: {
             aspectRatio: aspectRatio,
-            // imageSize only for gemini-3-pro-image-preview
-            imageSize: (model === 'gemini-3-pro-image-preview' && (quality === '4K' || quality === '8K')) ? '4K' : undefined
+            /* imageSize mapped for gemini-3-pro-image-preview; default to 1K if undefined */
+            imageSize: (model === 'gemini-3-pro-image-preview') 
+                ? (['1K', '2K', '4K'].includes(quality) ? quality : (quality === '8K' ? '4K' : '1K'))
+                : undefined
         }
     };
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
         model: model,
         contents: { parts: parts },
         config: config
     });
 
+    /* Guideline compliant: iterating candidates to find inlineData */
     for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) {
             return part.inlineData.data;
@@ -117,8 +129,10 @@ export const generateNewCreationSuggestions = async (refImageB64: string | null,
         parts[1].text = `Analyze this image and the context: "${context}". Generate 4 creative variations or editing ideas. Return JSON array of objects with 'vi' and 'en'.`;
     }
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: { parts },
         config: { responseMimeType: 'application/json' }
     });
@@ -158,11 +172,16 @@ export const generateCompositeImage = async (
 
     parts.push({ text: instruction });
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview', // Best for complex multimodal compositing
         contents: { parts },
         config: {
-            imageConfig: { aspectRatio: aspectRatio, imageSize: quality === '4K' ? '4K' : undefined }
+            imageConfig: { 
+                aspectRatio: aspectRatio, 
+                /* Resolution support for 1K, 2K, 4K mapping */
+                imageSize: (['1K', '2K', '4K'].includes(quality) ? quality : (quality === '8K' ? '4K' : '1K'))
+            }
         }
     });
 
@@ -176,8 +195,10 @@ export const generateStudioSuggestions = async (subjectB64: string | null, outfi
     const parts: any[] = [{ text: `Based on the provided assets (if any) and background "${background}", suggest 4 photorealistic composition prompts. JSON array { "vi": string, "en": string }.` }];
     if (subjectB64) parts.unshift({ inlineData: { mimeType: 'image/png', data: subjectB64 } });
     
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: { parts },
         config: { responseMimeType: 'application/json' }
     });
@@ -217,17 +238,22 @@ export const generateVideoStrategy = async (
     `;
     parts.push({ text: promptText });
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-pro-preview for complex script strategy reasoning */
+        model: 'gemini-3-pro-preview',
         contents: { parts },
         config: { responseMimeType: 'application/json' }
     });
+    /* Guideline compliant: text property access */
     return response.text || "[]";
 };
 
 export const generateVideoCaptions = async (product: string, usp: string, category: string, platform: string, tone: string, lang: string, scriptContent: string): Promise<any> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: `Generate social media captions for a video about ${product}. 
         USP: ${usp}. Platform: ${platform}. Script Context: ${scriptContent}.
         Return JSON: { "shortCaption": string, "longCaption": string, "hashtags": string[] }`,
@@ -241,8 +267,10 @@ export const generateMarketingStrategies = async (product: string, category: str
     if (imageB64) parts.push({ inlineData: { mimeType: 'image/png', data: imageB64 } });
     parts.push({ text: `Analyze this product "${product}" (${category}). Suggest 4 distinct marketing angles/strategies. Return JSON array: [{ "strategyName": string, "explanation": string, "data": { "usp": string, "painPoint": string, "cta": string, "audience": string } }]` });
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: { parts },
         config: { responseMimeType: 'application/json' }
     });
@@ -269,10 +297,19 @@ export const generateVeoSceneImage = async (
     
     parts.push({ text: finalPrompt });
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: quality === '4K' ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image',
+        /* Choose pro model for high-res requests or flash for speed */
+        model: (quality === '2K' || quality === '4K' || quality === '8K') ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image',
         contents: { parts },
-        config: { imageConfig: { aspectRatio: aspectRatio } }
+        config: { 
+            imageConfig: { 
+                aspectRatio: aspectRatio,
+                imageSize: (quality === '2K' || quality === '4K' || quality === '8K') 
+                    ? (['1K', '2K', '4K'].includes(quality) ? quality : (quality === '8K' ? '4K' : '1K'))
+                    : undefined
+            } 
+        }
     });
 
     for (const part of response.candidates[0].content.parts) {
@@ -282,8 +319,10 @@ export const generateVeoSceneImage = async (
 };
 
 export const regenerateScenePrompt = async (originalPrompt: string, context: string): Promise<string> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: `Rewrite this video scene prompt to be more descriptive and visual. Context: ${context}. Original: "${originalPrompt}"`
     });
     return response.text || originalPrompt;
@@ -319,11 +358,13 @@ export const generateAdvancedVeoVideo = async (params: { prompt: string, aspectR
         };
     }
 
+    const ai = getAI();
     let operation = await ai.models.generateVideos(requestPayload);
 
     // Polling
     while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        /* Recommended polling interval of 10000ms per guidelines */
+        await new Promise(resolve => setTimeout(resolve, 10000));
         operation = await ai.operations.getVideosOperation({ operation: operation });
     }
 
@@ -351,8 +392,10 @@ export const generateThumbnailSuggestions = async (sourceB64: string | null, pla
     if (sourceB64) parts.push({ inlineData: { mimeType: 'image/png', data: sourceB64 } });
     parts.push({ text: `Suggest 4 viral thumbnail concepts. Platform: ${platform}. Category: ${category}. Style: ${style}. Title: ${title}. Context: ${context}. Return JSON array: [{ "vi": string (Main Text), "en": string (Visual description), "data": { "sub": string (Subtitle) } }]` });
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: { parts },
         config: { responseMimeType: 'application/json' }
     });
@@ -360,8 +403,6 @@ export const generateThumbnailSuggestions = async (sourceB64: string | null, pla
 };
 
 export const generatePoster = async (modelB64: string | null, productB64: string | null, logoB64: string | null, headline: string, prompt: string, style: string, quality: string, negativePrompt: string): Promise<string> => {
-    // Combine assets into prompt instructions or use multimodal input if appropriate model supports multi-image
-    // For simplicity and robustness with gemini-3-pro-image-preview:
     const parts: any[] = [];
     if (modelB64) parts.push({ inlineData: { mimeType: 'image/png', data: modelB64 } });
     if (productB64) parts.push({ inlineData: { mimeType: 'image/png', data: productB64 } });
@@ -372,10 +413,16 @@ export const generatePoster = async (modelB64: string | null, productB64: string
     
     parts.push({ text: textPrompt });
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts },
-        config: { imageConfig: { aspectRatio: '3:4', imageSize: quality === '4K' ? '4K' : undefined } }
+        config: { 
+            imageConfig: { 
+                aspectRatio: '3:4', 
+                imageSize: (['1K', '2K', '4K'].includes(quality) ? quality : (quality === '8K' ? '4K' : '1K'))
+            } 
+        }
     });
 
     for (const part of response.candidates[0].content.parts) {
@@ -389,8 +436,10 @@ export const generatePosterSuggestions = async (modelB64: string | null, product
     if (productB64) parts.push({ inlineData: { mimeType: 'image/png', data: productB64 } });
     parts.push({ text: `Suggest 4 poster ad concepts based on context: "${context}". Return JSON array: [{ "vi": string (Headline), "en": string (Visual Prompt), "data": { "headline": string, "purpose": string } }]` });
     
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: { parts },
         config: { responseMimeType: 'application/json' }
     });
@@ -399,8 +448,10 @@ export const generatePosterSuggestions = async (modelB64: string | null, product
 
 // Character Creator
 export const generateCharacterNames = async (count: number, lang: string, gender: string, style: string): Promise<string[]> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: `Generate ${count} unique character names. Language/Nationality: ${lang}. Gender: ${gender}. Style: ${style}. Return JSON array of strings.`,
         config: { responseMimeType: 'application/json' }
     });
@@ -408,8 +459,10 @@ export const generateCharacterNames = async (count: number, lang: string, gender
 };
 
 export const generateCharacterConcepts = async (count: number, theme: string, style: string, lang: string): Promise<any[]> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: `Generate ${count} character concepts for a "${theme}" story. Style: ${style}. Language context: ${lang}. Return JSON array: [{ "setName": string (Group Name), "characters": [{ "name": string, "description": string }] }]`,
         config: { responseMimeType: 'application/json' }
     });
@@ -417,8 +470,10 @@ export const generateCharacterConcepts = async (count: number, theme: string, st
 };
 
 export const expandCharacterPrompt = async (name: string, desc: string, style: string): Promise<string> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: `Expand this character description into a detailed visual prompt for image generation. Character: ${name}. Description: ${desc}. Style: ${style}.`
     });
     return response.text || desc;
@@ -426,8 +481,10 @@ export const expandCharacterPrompt = async (name: string, desc: string, style: s
 
 // Story Creator
 export const generateDiverseStoryIdeas = async (charData: any[], mood: string, context: string, market: string): Promise<any[]> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: `Generate 4 diverse story ideas. Characters: ${JSON.stringify(charData)}. Mood: ${mood}. Context: ${context}. Market: ${market}. Return JSON array: [{ "title": string, "premise": string, "mood": string }]`,
         config: { responseMimeType: 'application/json' }
     });
@@ -435,8 +492,10 @@ export const generateDiverseStoryIdeas = async (charData: any[], mood: string, c
 };
 
 export const generateStoryStructure = async (characters: string[], premise: string, episodes: number, market: string): Promise<any> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Upgrade to gemini-3-pro-preview for complex narrative logic */
+        model: 'gemini-3-pro-preview',
         contents: `Create a story structure. Characters: ${characters.join(', ')}. Premise: ${premise}. Episodes: ${episodes}. Market: ${market}. 
         Return JSON: { "title": string, "summary": string, "episodes": [{ "episodeNumber": number, "title": string, "summary": string }] }`,
         config: { responseMimeType: 'application/json' }
@@ -445,8 +504,10 @@ export const generateStoryStructure = async (characters: string[], premise: stri
 };
 
 export const suggestCharacterVoices = async (charData: any[], availableVoices: string[], market: string): Promise<Record<string, string>> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: `Assign voices to characters. Characters: ${JSON.stringify(charData)}. Available Voices: ${JSON.stringify(availableVoices)}. Market: ${market}. Return JSON object mapping character name to voice name.`,
         config: { responseMimeType: 'application/json' }
     });
@@ -458,8 +519,10 @@ export const generateStoryScenes = async (
     textMode: string, prevScenes: any[], lang: string, sceneCount: number, 
     epIndex: number, totalEps: number, prevSum: string, nextSum: string
 ): Promise<any[]> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Upgrade to gemini-3-pro-preview for detailed storyboard generation */
+        model: 'gemini-3-pro-preview',
         contents: `Write a video script/storyboard. 
         Episode Summary: ${summary}. Total Duration: ${totalSeconds}s. Context: ${context}.
         Characters: ${JSON.stringify(charData)}. Voice Map: ${JSON.stringify(voiceMap)}.
@@ -472,8 +535,10 @@ export const generateStoryScenes = async (
 };
 
 export const generateYouTubeSEO = async (title: string, summary: string, lang: string, market: string): Promise<any> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: `Generate YouTube SEO metadata. Title: ${title}. Summary: ${summary}. Language: ${lang}. Market: ${market}.
         Return JSON: { "optimizedTitle": string, "hashtags": string[], "description": string, "postingStrategy": string }`,
         config: { responseMimeType: 'application/json' }
@@ -490,10 +555,16 @@ export const generateStoryThumbnail = async (
     
     parts.push({ text: `Create a YouTube Thumbnail. Story: ${storyTitle}. Ep ${epNum}: ${epTitle}. Summary: ${epSummary}. Layout: ${layout}. Language: ${lang}. Hook Text: ${hook}. Style: ${style}. High CTR, Viral.` });
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts },
-        config: { imageConfig: { aspectRatio: aspectRatio } }
+        config: { 
+            imageConfig: { 
+                aspectRatio: aspectRatio,
+                imageSize: '1K' 
+            } 
+        }
     });
 
     for (const part of response.candidates[0].content.parts) {
@@ -504,8 +575,10 @@ export const generateStoryThumbnail = async (
 
 // Channel Builder
 export const generateChannelStrategy = async (product: string, platform: string, niche: string, goal: string, market: string, type: string): Promise<any> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Upgrade to gemini-3-pro-preview for comprehensive business strategy generation */
+        model: 'gemini-3-pro-preview',
         contents: `Create a channel strategy. Product: ${product}. Platform: ${platform}. Niche: ${niche}. Goal: ${goal}. Market: ${market}. Type: ${type}.
         Return JSON: { "channelIdentity": { "name": string, "bio": string, "keywords": string[] }, "postingSchedule": { "shorts": { "bestTimes": string[] }, "longVideo": { "bestTimes": string[] } }, "contentStrategy": { "pillars": [{ "name": string, "ratio": string, "ideas": string[] }] } }`,
         config: { responseMimeType: 'application/json' }
@@ -514,8 +587,10 @@ export const generateChannelStrategy = async (product: string, platform: string,
 };
 
 export const generateDailyChannelTask = async (plan: any, doneTasks: string[]): Promise<any> => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: `Generate a daily task for a content creator. Plan: ${JSON.stringify(plan)}. Done Tasks: ${JSON.stringify(doneTasks)}.
         Return JSON: { "taskTitle": string, "description": string, "videoConcept": { "title": string, "hook": string } }`,
         config: { responseMimeType: 'application/json' }
@@ -537,8 +612,10 @@ export const generateSpecificChannelDetail = async (type: 'bio' | 'keywords' | '
         prompt = `Create a detailed "Gmail Warming & Interaction Plan" to build high trust (Trust Score) for a new Google Account. Context: ${context}. Format: Clear Markdown.`;
     }
 
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        /* Updated model to gemini-3-flash-preview */
+        model: 'gemini-3-flash-preview',
         contents: { parts: [{ text: prompt }] }
     });
     return response.text || "";

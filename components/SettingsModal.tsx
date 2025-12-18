@@ -10,7 +10,8 @@ import { User } from '../types';
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    addToast: (title: string, message: string, type: 'success' | 'error' | 'info') => void;
+    /* Added 'warning' to addToast type signature to fix type errors on line 81 and 96 */
+    addToast: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
     user: User;
 }
 
@@ -19,14 +20,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
     const [isProcessing, setIsProcessing] = useState(false);
     const [modelTier, setModelTier] = useState<'free' | 'paid'>('free');
     
-    // Account Edit States
     const [editUsername, setEditUsername] = useState('');
     const [editPassword, setEditPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [editTelegramId, setEditTelegramId] = useState('');
     const [botUsername, setBotUsername] = useState<string | null>(null);
 
-    // Google Drive States
     const [driveClientId, setDriveClientId] = useState('');
     const [driveApiKey, setDriveApiKey] = useState('');
     const [isDriveLinked, setIsDriveLinked] = useState(false);
@@ -38,7 +37,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
             setEditUsername(user.username);
             setEditTelegramId(user.telegramChatId || '');
             
-            // Load Drive Config
             const driveConfig = localStorage.getItem('ue_drive_config');
             if (driveConfig) {
                 const parsed = JSON.parse(driveConfig);
@@ -81,6 +79,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
 
     const handleLinkDrive = async () => {
         if (!driveClientId || !driveApiKey) {
+            /* Fix: 'warning' is now allowed by the updated interface signature (Error Line 81) */
             addToast('Thiếu thông tin', 'Vui lòng nhập Client ID và API Key trước.', 'warning');
             return;
         }
@@ -94,9 +93,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
         } finally { setIsProcessing(false); }
     };
 
-    // --- RETRIEVAL: EXCHANGE INFO FROM CLOUD ---
     const handleSyncFromCloud = async () => {
         if (!isDriveLinked) {
+            /* Fix: 'warning' is now allowed by the updated interface signature (Error Line 96) */
             addToast('Yêu cầu liên kết', 'Vui lòng liên kết Google Drive trước.', 'warning');
             return;
         }
@@ -113,21 +112,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
             let count = 0;
             for (const item of items) {
                 if (item.type === 'character' || item.type === 'story_character') {
-                    // Restore character
                     await saveCharacter({
                         id: item.id.replace('char_', ''),
                         name: item.prompt || item.name,
                         base64Data: item.base64Data.split(',')[1] || item.base64Data,
                         createdAt: item.createdAt
                     });
-                    count++;
                 }
-                // Standard items (Scripts, images, stories)
                 await saveItem(item);
                 count++;
             }
             
-            addToast('Đồng bộ hoàn tất', `Đã khôi phục ${count} mục từ Drive để bạn tiếp tục hoạt động.`, 'success');
+            addToast('Đồng bộ hoàn tất', `Đã khôi phục ${count} mục từ Drive.`, 'success');
             setTimeout(() => window.location.reload(), 1500);
         } catch (e) {
             addToast('Lỗi đồng bộ', 'Không thể lấy dữ liệu từ Drive.', 'error');
@@ -156,7 +152,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out] p-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col">
                 
-                {/* Header */}
                 <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-zinc-900/50 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
@@ -169,7 +164,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                     </button>
                 </div>
 
-                {/* Tabs */}
                 <div className="flex border-b border-white/5 bg-zinc-900/30 px-6 shrink-0">
                     {[
                         { id: 'account', label: 'Tài khoản', icon: UserIcon },
@@ -186,7 +180,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                     ))}
                 </div>
 
-                {/* Body */}
                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-zinc-950/20">
                     
                     {activeTab === 'account' && (
@@ -231,7 +224,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                                         </button>
                                         <button onClick={() => handleSaveTier('paid')} className={`p-4 rounded-xl border text-left transition-all ${modelTier === 'paid' ? 'bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border-purple-500 ring-1 ring-purple-500' : 'bg-zinc-950 border-zinc-800'}`}>
                                             <div className="font-bold text-sm text-white">Gemini 3.0 Pro</div>
-                                            <div className="text-[10px] text-zinc-500">Chất lượng cao / Đa phương thức</div>
+                                            <div className="text-[10px] text-zinc-500">Chất lượng cao</div>
                                         </button>
                                     </div>
                                 </div>
@@ -245,7 +238,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                                 <CloudDownload size={24} className="text-blue-400 shrink-0 mt-0.5" />
                                 <div className="text-xs text-blue-200 leading-relaxed">
                                     <p className="font-bold mb-1">Trao đổi dữ liệu đám mây</p>
-                                    Khi liên kết Drive, hệ thống không chỉ lưu mà còn có thể <strong>truy xuất (Download)</strong> các kịch bản và nhân vật cũ để bạn tiếp tục hoạt động trên bất kỳ thiết bị nào.
+                                    Hệ thống có thể truy xuất dữ liệu từ Drive để bạn tiếp tục hoạt động trên bất kỳ thiết bị nào.
                                 </div>
                             </div>
 
@@ -281,24 +274,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
 
                             <div className="pt-6 border-t border-white/5">
                                 <h4 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <Info size={14} className="text-blue-400"/> Cách lấy Client ID và API Key
+                                    <Info size={14} className="text-blue-400"/> Hướng dẫn thiết lập API
                                 </h4>
                                 <div className="space-y-4 text-xs text-zinc-400 leading-relaxed bg-zinc-900/50 p-5 rounded-2xl border border-zinc-800 shadow-inner">
                                     <div className="space-y-3">
                                         <p className="font-bold text-white">Bước 1: Tạo Project</p>
-                                        <p>Truy cập <a href="https://console.cloud.google.com/" target="_blank" className="text-blue-400 hover:underline">Google Cloud Console</a>. Tạo Project mới tên "UltraEdit".</p>
+                                        <p>Truy cập Google Cloud Console. Tạo Project mới tên "UltraEdit".</p>
                                         
                                         <p className="font-bold text-white">Bước 2: Bật Drive API</p>
                                         <p>Vào <strong>Library</strong>, tìm "Google Drive API" và bấm <strong>Enable</strong>.</p>
                                         
-                                        <p className="font-bold text-white">Bước 3: Cấu hình OAuth (Quan trọng nhất)</p>
-                                        <p>Vào <strong>OAuth consent screen</strong>, chọn User Type: External. Điền tên App. Tại mục Scopes, bấm "Add scope" và nhập <code>https://www.googleapis.com/auth/drive.file</code> (Chỉ cho phép App đọc tệp nó tạo ra).</p>
+                                        <p className="font-bold text-white">Bước 3: Cấu hình OAuth</p>
+                                        <p>Vào <strong>OAuth consent screen</strong>, chọn User Type: External. Thêm scope <code>drive.file</code>.</p>
                                         
                                         <p className="font-bold text-white">Bước 4: Tạo Credentials</p>
                                         <ul className="list-disc pl-4 space-y-2">
-                                            <li>Bấm "Create Credentials" > "API Key". Sao chép dán vào ô API Key.</li>
-                                            <li>Bấm "Create Credentials" > "OAuth client ID" > "Web application".</li>
-                                            <li>Tại <strong>Authorized JavaScript origins</strong>: Thêm <code>https://localhost:3000</code> hoặc domain web của bạn.</li>
+                                            <li>Bấm "Create Credentials" &gt; "API Key". Sao chép dán vào ô API Key.</li>
+                                            <li>Bấm "Create Credentials" &gt; "OAuth client ID" &gt; "Web application".</li>
+                                            <li>Tại <strong>Origins</strong>: Thêm URL web của bạn.</li>
                                             <li>Bấm Create và lấy Client ID.</li>
                                         </ul>
                                     </div>
@@ -312,7 +305,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 flex gap-3 items-start">
                                 <AlertCircle size={20} className="text-yellow-500 shrink-0 mt-0.5" />
                                 <p className="text-xs text-zinc-400 leading-relaxed">
-                                    Dữ liệu local (IndexedDB) cực kỳ nhanh nhưng có thể bị xóa bởi trình duyệt nếu máy hết dung lượng. Hãy dùng Cloud để đảm bảo an toàn.
+                                    Dữ liệu local (IndexedDB) nhanh nhưng có thể bị xóa bởi trình duyệt nếu máy hết dung lượng.
                                 </p>
                             </div>
 
@@ -344,10 +337,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                     )}
                 </div>
 
-                {/* Footer */}
                 <div className="p-4 border-t border-white/5 bg-zinc-900/50 shrink-0 flex justify-between items-center">
                     <div className="text-[10px] text-zinc-600 flex items-center gap-1">
-                        <Lock size={10}/> Mã hóa end-to-end (Client-side)
+                        <Lock size={10}/> Mã hóa bảo mật (Client-side)
                     </div>
                     <button onClick={onClose} className="px-6 py-2 bg-white text-black text-xs font-bold rounded-lg hover:bg-zinc-200 transition-colors">Đóng</button>
                 </div>

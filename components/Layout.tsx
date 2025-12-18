@@ -13,7 +13,8 @@ interface LayoutProps {
   user: User;
   onLogout: () => void;
   onOpenSettings: () => void;
-  addToast?: (title: string, message: string, type: 'success' | 'error' | 'info') => void;
+  /* Added 'warning' to addToast type signature */
+  addToast?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   notifications?: AppNotification[];
   onMarkAllRead?: () => void;
   onDeleteNotification?: (id: string) => void;
