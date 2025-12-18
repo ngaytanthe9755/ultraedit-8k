@@ -355,12 +355,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, 
                 <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white z-10" disabled={isLoading}><X size={20}/></button>
                 <div className="p-8 overflow-y-auto custom-scrollbar">
                     <div className="text-center mb-6 flex flex-col items-center">
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 p-1 shadow-2xl mb-4">
+                        <div className="w-16 h-16 rounded-2xl bg-zinc-800/50 p-1 shadow-2xl mb-4 border border-white/10 overflow-hidden">
                             <img 
                                 src="/logo.png" 
                                 alt="Logo" 
-                                className="w-full h-full object-contain rounded-xl"
-                                onError={(e) => (e.target as HTMLImageElement).src = "https://api.dicebear.com/7.x/identicon/svg?seed=UltraEdit8K&backgroundColor=4f46e5"}
+                                className="w-full h-full object-contain"
+                                onError={(e) => (e.target as HTMLImageElement).src = "https://img.icons8.com/fluency/48/layers.png"}
                             />
                         </div>
                         <h2 className="text-2xl font-black text-white mb-2">UltraEdit 8K</h2>

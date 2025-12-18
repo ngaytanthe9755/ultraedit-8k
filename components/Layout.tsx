@@ -20,18 +20,18 @@ interface LayoutProps {
   onOpenLogin: () => void;
 }
 
-// Logo Component Reusable - Updated to use /logo.png
+// Logo Component hiển thị file logo.png từ thư mục gốc
 const AppLogo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
     const dimensions = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-12 h-12' : 'w-10 h-10';
     return (
-        <div className={`${dimensions} rounded-xl bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 p-0.5 shadow-lg shadow-indigo-500/20 flex items-center justify-center overflow-hidden shrink-0`}>
+        <div className={`${dimensions} rounded-xl bg-zinc-800/50 p-1 shadow-lg flex items-center justify-center overflow-hidden shrink-0 border border-white/10`}>
             <img 
                 src="/logo.png" 
-                alt="UltraEdit 8K Logo" 
-                className="w-full h-full object-contain rounded-lg"
+                alt="Logo" 
+                className="w-full h-full object-contain"
                 onError={(e) => {
-                    // Fallback nếu người dùng chưa kịp bỏ file logo.png vào thư mục
-                    (e.target as HTMLImageElement).src = "https://api.dicebear.com/7.x/identicon/svg?seed=UltraEdit8K&backgroundColor=4f46e5";
+                    // Fallback nếu không tìm thấy file logo.png
+                    (e.target as HTMLImageElement).src = "https://img.icons8.com/fluency/48/layers.png";
                 }}
             />
         </div>
