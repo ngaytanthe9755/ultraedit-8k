@@ -6,7 +6,7 @@ import {
     RefreshCw, Edit2, FileText, Share2, Layers, 
     MonitorPlay, Speaker, Globe, Sparkles, LayoutTemplate,
     Clock, Settings, ArrowRight, CheckCircle2, Video as VideoIcon, Mic, Clapperboard, Palette, VolumeX, Volume2, List, MapPin,
-    SplitSquareHorizontal, SplitSquareVertical, Grid, Copy, CheckCircle, Folder, Flag, RotateCcw, Type, TrendingUp, Hash, AlignLeft, Send, AlertTriangle, X, BrainCircuit, Timer, ScrollText, MousePointerClick, Camera, ChevronDown, CheckSquare, Square, PlayCircle, Zap
+    SplitSquareHorizontal, SplitSquareVertical, Grid, Copy, CheckCircle, Folder, Flag, RotateCcw, Type, TrendingUp, Hash, AlignLeft, Send, AlertTriangle, X, BrainCircuit, Timer, ScrollText, MousePointerClick, Camera, ChevronDown, CheckSquare, Square, PlayCircle, Zap, Maximize2
 } from 'lucide-react';
 import { generateStoryStructure, generateStoryScenes, generateYouTubeSEO, generateImage, enhancePrompt, suggestCharacterVoices, generateDiverseStoryIdeas, generateStoryThumbnail, generateVeoSceneImage } from '../services/geminiService';
 import { saveItem, getAllItems } from '../services/db';
@@ -576,22 +576,33 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
             // Casting info inclusion for script
             const castingInfo = !isSilentMode ? `Voice Cast: ${JSON.stringify(voiceMap)}` : 'Silent Mode (Ambient)';
 
-            // --- CRITICAL UPDATE: INJECT GENRE, MOOD & HOOK ---
+            // --- STRICT PRODUCTION MANIFEST WITH CONCEPT ADHERENCE ---
             const productionManifest = `
-                FILM TITLE: ${storyStructure.title}.
-                GENRE: ${selectedGenre.label}.
-                MOOD: ${selectedMood}.
-                CORE PREMISE: ${ideaContext || storyStructure.summary}.
-                VISUAL STYLE: ${visualStyle.prompt}.
-                CAMERA DIRECTIVES: ${cameraPrompts}.
-                DIRECTOR SETTINGS: ${autoEnhance ? 'Auto-Enhance enabled (add rich details)' : 'Raw inputs'}.
-                AUDIO MODE: ${isSilentMode ? 'Silent/Ambient (Focus on Sound SFX)' : 'Dialogue-driven'}.
-                CASTING: ${castingInfo}.
-                PACING & RETENTION STRATEGY: ${retentionPrompt}.
-                OPENING HOOK STRATEGY: ${hookPrompt}.
-                INTERACTION (CTA) STRATEGY: ${ctaPrompt}.
-                NARRATIVE FRAMEWORK: ${frameworkPrompt}.
-                TECHNICAL SPECS: Aspect Ratio ${aspectRatio}, Quality ${quality}.
+                **PRODUCTION BIBLE (STRICT ADHERENCE REQUIRED)**
+                
+                1. **CORE IDENTITY (CONCEPT):**
+                   - TITLE: ${storyStructure.title}
+                   - GENRE: ${selectedGenre.label}
+                   - MOOD: ${selectedMood}
+                   - PREMISE: ${ideaContext || storyStructure.summary}
+                   - **ASPECT RATIO:** ${aspectRatio} (Visual composition MUST fit this frame).
+
+                2. **VISUAL & CAMERA (PLAN):**
+                   - VISUAL STYLE: ${visualStyle.prompt}
+                   - CAMERA ANGLES: ${cameraPrompts || 'Dynamic Cinematic Angles'} (Use these angles explicitly).
+                   - ENHANCEMENT: ${autoEnhance ? 'Detailed, rich environmental descriptions' : 'Standard descriptions'}.
+
+                3. **AUDIO & PACING (PLAN):**
+                   - AUDIO MODE: ${isSilentMode ? 'SILENT/AMBIENT (Minimal dialogue, heavy SFX focus)' : 'DIALOGUE-DRIVEN'}.
+                   - VOICE CAST: ${castingInfo}.
+                   - RETENTION STRATEGY: ${retentionPrompt} (Apply this pacing logic to scene durations and cuts).
+                
+                4. **STRUCTURE & ENGAGEMENT (PLAN):**
+                   - OPENING HOOK: ${hookPrompt} (Scene 1 MUST follow this).
+                   - NARRATIVE FRAMEWORK: ${frameworkPrompt}.
+                   - CTA STRATEGY: ${ctaPrompt} (Integrate naturally).
+
+                **INSTRUCTION:** Generate scenes that strictly follow the Aspect Ratio composition from CONCEPT and the chosen PLAN settings. Visual prompts must be optimized for AI Video generation in ${aspectRatio} format.
             `;
 
             const generatedScenes = await generateStoryScenes(
@@ -1061,7 +1072,14 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
                                 <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-5">
                                     {/* ... Existing Story Title/Summary ... */}
                                     <h3 className="text-lg font-bold text-white mb-1">{storyStructure.title}</h3>
-                                    <p className="text-xs text-zinc-400 mb-4 line-clamp-2">{storyStructure.summary}</p>
+                                    <p className="text-xs text-zinc-400 mb-2 line-clamp-2">{storyStructure.summary}</p>
+                                    
+                                    {/* NEW: CONCEPT SUMMARY BADGES */}
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        <span className="text-[9px] font-bold bg-zinc-800 text-zinc-300 px-2 py-1 rounded border border-zinc-700 uppercase">Aspect Ratio: {aspectRatio}</span>
+                                        <span className="text-[9px] font-bold bg-zinc-800 text-zinc-300 px-2 py-1 rounded border border-zinc-700 uppercase">Genre: {selectedGenre.label.split('(')[0]}</span>
+                                        <span className="text-[9px] font-bold bg-zinc-800 text-zinc-300 px-2 py-1 rounded border border-zinc-700 uppercase">Mood: {selectedMood.split('(')[0]}</span>
+                                    </div>
                                     
                                     <div className="mb-4 space-y-2">
                                         <label className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-1"><Palette size={10}/> Visual Style (Quan trọng)</label>
@@ -1258,18 +1276,52 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
 
                         {/* ... Rest of Scene Rendering ... */}
                         {showThumbConfig && (
-                            <div className="mb-4 bg-zinc-950/80 border border-red-900/30 rounded-xl p-4 animate-in slide-in-from-top-4 flex flex-col md:flex-row gap-4 items-end">
-                                <div className="flex-1 w-full space-y-3">
-                                    <div className="flex items-center gap-2 mb-1"><MonitorPlay size={16} className="text-red-500"/><h4 className="text-sm font-bold text-white uppercase tracking-wider">Viral Thumbnail Studio</h4></div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Layout</label><select value={thumbLayout} onChange={(e) => setThumbLayout(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-xs text-white outline-none">{THUMB_LAYOUTS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</select></div>
-                                        <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Style (Viral)</label><select value={thumbStyle} onChange={(e) => setThumbStyle(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-xs text-white outline-none">{YT_STYLES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
-                                        <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Cảm xúc</label><select value={thumbEmotion} onChange={(e) => setThumbEmotion(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-xs text-white outline-none">{YT_EMOTIONS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select></div>
-                                        <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Ngôn ngữ Text</label><select value={thumbTextLang} onChange={(e) => setThumbTextLang(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-xs text-white outline-none">{THUMB_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}</select></div>
+                            <div className="mb-4 bg-zinc-950/80 border border-red-900/30 rounded-xl p-4 animate-in slide-in-from-top-4 space-y-4">
+                                <div className="flex flex-col md:flex-row gap-4 items-end">
+                                    <div className="flex-1 w-full space-y-3">
+                                        <div className="flex items-center gap-2 mb-1"><MonitorPlay size={16} className="text-red-500"/><h4 className="text-sm font-bold text-white uppercase tracking-wider">Viral Thumbnail Studio</h4></div>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Layout</label><select value={thumbLayout} onChange={(e) => setThumbLayout(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-xs text-white outline-none">{THUMB_LAYOUTS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</select></div>
+                                            <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Style (Viral)</label><select value={thumbStyle} onChange={(e) => setThumbStyle(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-xs text-white outline-none">{YT_STYLES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
+                                            <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Cảm xúc</label><select value={thumbEmotion} onChange={(e) => setThumbEmotion(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-xs text-white outline-none">{YT_EMOTIONS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}</select></div>
+                                            <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Ngôn ngữ Text</label><select value={thumbTextLang} onChange={(e) => setThumbTextLang(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded p-2 text-xs text-white outline-none">{THUMB_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}</select></div>
+                                        </div>
+                                        <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Hook Text (Clickbait)</label><div className="relative"><Type size={14} className="absolute left-3 top-2.5 text-zinc-500"/><input type="text" value={thumbHookText} onChange={e => setThumbHookText(e.target.value)} placeholder="VD: SỰ THẬT SỐC!..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-4 py-2 text-sm text-white font-bold placeholder-zinc-600 focus:border-red-500 outline-none"/></div></div>
                                     </div>
-                                    <div><label className="text-[10px] text-zinc-500 font-bold block mb-1">Hook Text (Clickbait)</label><div className="relative"><Type size={14} className="absolute left-3 top-2.5 text-zinc-500"/><input type="text" value={thumbHookText} onChange={e => setThumbHookText(e.target.value)} placeholder="VD: SỰ THẬT SỐC!..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-4 py-2 text-sm text-white font-bold placeholder-zinc-600 focus:border-red-500 outline-none"/></div></div>
+                                    <div className="w-full md:w-auto"><button onClick={handleGenerateEpisodeThumbnail} disabled={isGlobalProcessing} className="w-full md:w-auto h-[40px] px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 transition-all hover:scale-105 whitespace-nowrap">{isGlobalProcessing ? <Loader2 size={18} className="animate-spin"/> : <Wand2 size={18}/>}Tạo Thumbnail Viral</button></div>
                                 </div>
-                                <div className="w-full md:w-auto"><button onClick={handleGenerateEpisodeThumbnail} disabled={isGlobalProcessing} className="w-full md:w-auto h-[40px] px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 transition-all hover:scale-105 whitespace-nowrap">{isGlobalProcessing ? <Loader2 size={18} className="animate-spin"/> : <Wand2 size={18}/>}Tạo Thumbnail Viral</button></div>
+
+                                {(storyStructure?.episodes[currentEpisodeIndex] as any)?.thumbnail && (
+                                    <div className="pt-4 border-t border-red-900/30 animate-in fade-in slide-in-from-top-2">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <CheckCircle2 size={14} className="text-green-500"/>
+                                            <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider">Kết quả Thumbnail</span>
+                                        </div>
+                                        <div className="relative w-full max-w-sm aspect-video rounded-xl overflow-hidden border border-zinc-700 shadow-xl group bg-black/50">
+                                            <img 
+                                                src={(storyStructure.episodes[currentEpisodeIndex] as any).thumbnail} 
+                                                className="w-full h-full object-cover" 
+                                                onClick={() => setPreviewImage((storyStructure.episodes[currentEpisodeIndex] as any).thumbnail)}
+                                            />
+                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
+                                                <button 
+                                                    onClick={() => triggerDownload((storyStructure.episodes[currentEpisodeIndex] as any).thumbnail, `Thumbnail-Ep${String((storyStructure.episodes[currentEpisodeIndex] as any).episodeNumber).padStart(3, '0')}.png`)} 
+                                                    className="p-2 bg-white text-black rounded-full hover:bg-zinc-200 transition-transform hover:scale-110 shadow-lg"
+                                                    title="Tải xuống"
+                                                >
+                                                    <Download size={18}/>
+                                                </button>
+                                                <button 
+                                                    onClick={() => setPreviewImage((storyStructure.episodes[currentEpisodeIndex] as any).thumbnail)} 
+                                                    className="p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-500 transition-transform hover:scale-110 shadow-lg"
+                                                    title="Xem chi tiết"
+                                                >
+                                                    <Maximize2 size={18}/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
