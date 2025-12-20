@@ -122,12 +122,20 @@ class GoogleDriveService {
             gapi.load('client', async () => {
                 try {
                     // Initialize client WITHOUT discoveryDocs to avoid the "missing required fields" error
+                    // Explicitly set discoveryDocs to empty array to be safe
                     await gapi.client.init({
                         apiKey: this.config!.apiKey,
+                        discoveryDocs: [],
                     });
 
-                    // Explicitly load Drive V3. This is the fix for the error.
-                    await gapi.client.load('drive', 'v3');
+                    // Explicitly load Drive V3 using REST URL to bypass potential short-name discovery issues
+                    // This is more robust than gapi.client.load('drive', 'v3')
+                    try {
+                        await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
+                    } catch (loadErr) {
+                        console.warn("Failed to load Drive V3 via URL, trying short name...", loadErr);
+                        await gapi.client.load('drive', 'v3');
+                    }
                     
                     this.gapiInited = true;
 
