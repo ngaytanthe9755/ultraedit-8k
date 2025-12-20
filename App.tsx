@@ -21,13 +21,14 @@ import { Key, X, Loader2, Cloud, Link, MessageCircle, Send, CheckCircle2, Lock, 
 import { v4 as uuidv4 } from 'uuid';
 import { loginUser, registerUser, getAllUsers, getUserNotifications, markNotificationsRead, isSessionValid, syncUsersFromCloud, findUserByContact, resetPassword, finalizeUserLogin, getSystemConfig } from './services/userService';
 import { generateOTP, sendOTP, getBotInfo } from './services/telegramService';
+import { driveService } from './services/googleDriveService'; // Import Drive Service
 
 // ... (PolicyModal, TelegramConnect, AuthModal remain unchanged) ...
-// To save space, I will focus on the return statement of App component where routing happens.
-// Assuming the top part of the file is identical to what was provided in context.
+// The full content of App.tsx is large. I will include the unchanged components briefly 
+// and focus on the useEffect in the main App component.
 
-// --- POLICY MODAL COMPONENT ---
 const PolicyModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+    // ... Implementation (Unchanged)
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-[fadeIn_0.2s_ease-out]">
@@ -87,7 +88,7 @@ const PolicyModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpe
     );
 };
 
-// --- TELEGRAM CONNECT COMPONENT ---
+// ... TelegramConnect and AuthModal (Unchanged) ...
 const TelegramConnect: React.FC<{
     telegramChatId: string; 
     setTelegramChatId: (id: string) => void;
@@ -174,7 +175,6 @@ const TelegramConnect: React.FC<{
     );
 };
 
-// --- AUTH MODAL COMPONENT ---
 interface AuthModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -183,8 +183,7 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, addToast }) => {
-    // ... [AuthModal implementation unchanged] ...
-    // Using previous implementation for AuthModal to save tokens
+    // ... Auth Modal implementation (Unchanged)
     const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -429,6 +428,27 @@ const App: React.FC = () => {
       userRef.current = user;
   }, [user]);
 
+  // NEW: AUTO-SYNC DRIVE ON STARTUP (ONLY IF NOT IN CLOUD-ONLY MODE)
+  useEffect(() => {
+      const isCloudOnly = localStorage.getItem('ue_cloud_only_mode') === 'true';
+      if (driveService.isConfigured()) {
+          driveService.initialize().then(() => {
+              if (driveService.isAuthenticated()) {
+                  if (isCloudOnly) {
+                      console.log("[App] Cloud-Only mode active. Skipping auto-download to DB.");
+                  } else {
+                      console.log("[App] Auto-syncing from Drive to Local DB...");
+                      driveService.syncRemoteToLocal().then(count => {
+                          if (count > 0) {
+                              addToast("Đồng bộ Cloud", `Đã tự động tải về ${count} mục mới từ Google Drive.`, "success");
+                          }
+                      });
+                  }
+              }
+          }).catch(err => console.warn("[App] Drive init warning:", err));
+      }
+  }, []);
+
   useEffect(() => {
     const storedUser = localStorage.getItem('ue_current_user');
     if (storedUser) {
@@ -666,7 +686,7 @@ const App: React.FC = () => {
           <PhotoEditor 
             addToast={addToast} 
             isAuthenticated={user.isAuthenticated}
-            onRequireAuth={() => setIsAuthModalOpen(true)}
+            onRequireAuth={() => setIsAuthModalOpen(true)} 
           />
       </div>
 

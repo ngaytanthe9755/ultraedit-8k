@@ -8,6 +8,7 @@
  * - Implemented dynamic script loading.
  * - Used explicit `gapi.client.load` for Drive V3.
  * - Improved Multipart body construction.
+ * - Added Smart Sync (syncRemoteToLocal).
  */
 
 const FOLDER_NAME = 'UltraEdit_8K_Data';
@@ -109,6 +110,11 @@ class GoogleDriveService {
 
             if (!gapi || !google) {
                 reject(new Error("Google API scripts failed to load."));
+                return;
+            }
+
+            if (this.gapiInited && this.gisInited) {
+                resolve();
                 return;
             }
 
@@ -242,6 +248,9 @@ class GoogleDriveService {
         const gapi = (window as any).gapi;
         
         try {
+            // Ensure init if called directly
+            if (!this.gapiInited) await this.initialize();
+
             const folderId = await this.getAppFolderId();
             const fileName = `${item.id}.json`;
 
@@ -251,7 +260,7 @@ class GoogleDriveService {
                 fields: 'files(id)',
             });
 
-            const fileContent = JSON.stringify(item, null, 2); // Pretty print for easier debugging
+            const fileContent = JSON.stringify(item, null, 2); 
             const contentType = 'application/json';
             
             // Metadata part
@@ -314,7 +323,6 @@ class GoogleDriveService {
     public async fetchAllItems(): Promise<any[]> {
         if (!this.isAuthenticated()) throw new Error("Not authenticated or token expired");
         
-        // Re-ensure GAPI is loaded (in case of page refresh state loss)
         if (!this.gapiInited) await this.initialize();
 
         const gapi = (window as any).gapi;
@@ -334,13 +342,13 @@ class GoogleDriveService {
                     q: `'${folderId}' in parents and mimeType = 'application/json' and trashed = false`,
                     fields: 'nextPageToken, files(id, name)',
                     pageToken: pageToken,
-                    pageSize: 100 // Maximize page size
+                    pageSize: 100 
                 });
 
                 const files = response.result.files;
                 
                 // Fetch content in parallel chunks
-                const batchSize = 5; // Reduced batch size to prevent rate limiting
+                const batchSize = 5; 
                 for (let i = 0; i < files.length; i += batchSize) {
                     const batch = files.slice(i, i + batchSize);
                     const contents = await Promise.all(batch.map((f: any) => 
@@ -364,6 +372,93 @@ class GoogleDriveService {
     }
 
     /**
+     * Smart Sync: Downloads only missing items from Remote to Local
+     */
+    public async syncRemoteToLocal(): Promise<number> {
+        if (!this.isAuthenticated()) return 0;
+        if (!this.gapiInited) await this.initialize();
+
+        const gapi = (window as any).gapi;
+        let downloadedCount = 0;
+
+        try {
+            const folderId = await this.getAppFolderId();
+            
+            // Dynamic import to avoid circular dependency loop at file level
+            const { hasItem, saveItem } = await import('./db');
+
+            // 1. List all files in Drive Folder
+            let pageToken = null;
+            const remoteFiles: any[] = [];
+
+            do {
+                const response: any = await gapi.client.drive.files.list({
+                    q: `'${folderId}' in parents and mimeType = 'application/json' and trashed = false`,
+                    fields: 'nextPageToken, files(id, name)', // name is usually "UUID.json"
+                    pageToken: pageToken,
+                    pageSize: 100 
+                });
+                if (response.result.files) {
+                    remoteFiles.push(...response.result.files);
+                }
+                pageToken = response.result.nextPageToken;
+            } while (pageToken);
+
+            // 2. Filter files that are missing locally
+            const missingFiles = [];
+            for (const file of remoteFiles) {
+                // Assuming name is "UUID.json", remove extension to get ID
+                const itemId = file.name.replace('.json', '');
+                const exists = await hasItem(itemId);
+                if (!exists) {
+                    missingFiles.push(file);
+                }
+            }
+
+            if (missingFiles.length === 0) {
+                console.log("[Drive] Local DB is up to date.");
+                return 0;
+            }
+
+            console.log(`[Drive] Found ${missingFiles.length} missing items. Syncing down...`);
+
+            // 3. Download missing files in chunks
+            const batchSize = 3; // Conservative batch for downloads
+            for (let i = 0; i < missingFiles.length; i += batchSize) {
+                const batch = missingFiles.slice(i, i + batchSize);
+                
+                await Promise.all(batch.map(async (f: any) => {
+                    try {
+                        const content = await gapi.client.drive.files.get({
+                            fileId: f.id,
+                            alt: 'media'
+                        }).then((res: any) => res.result);
+                        
+                        // Save to local DB, but SKIP sync-up loop
+                        if (content && content.id) {
+                            await saveItem(content, true); 
+                            downloadedCount++;
+                        }
+                    } catch (err) {
+                        console.error(`[Drive] Failed to download ${f.name}`, err);
+                    }
+                }));
+            }
+            
+            // Trigger UI update once
+            if (downloadedCount > 0) {
+                window.dispatchEvent(new Event('library_updated'));
+            }
+
+            return downloadedCount;
+
+        } catch (e: any) {
+            console.error("[Drive] Smart Sync Error", e);
+            return 0;
+        }
+    }
+
+    /**
      * Delete file from Drive
      */
     public async deleteItem(id: string): Promise<void> {
@@ -371,6 +466,9 @@ class GoogleDriveService {
         const gapi = (window as any).gapi;
         
         try {
+            // Ensure init if called directly
+            if (!this.gapiInited) await this.initialize();
+
             const folderId = await this.getAppFolderId();
             const fileName = `${id}.json`;
             const listResp = await gapi.client.drive.files.list({

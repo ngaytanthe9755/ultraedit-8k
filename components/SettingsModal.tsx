@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Cloud, Download, Upload, CheckCircle, AlertCircle, HardDrive, RefreshCw, X, Cpu, Zap, Crown, UserCog, Save, Key, User as UserIcon, MessageCircle, Lock, Loader2, Database, Link, Check } from 'lucide-react';
+import { Cloud, Download, Upload, CheckCircle, AlertCircle, HardDrive, RefreshCw, X, Cpu, Zap, Crown, UserCog, Save, Key, User as UserIcon, MessageCircle, Lock, Loader2, Database, Link, Check, ToggleLeft, ToggleRight } from 'lucide-react';
 import { exportDatabase, importDatabase, saveItem, getAllItems } from '../services/db'; // Import getAllItems/saveItem for sync
 import { updateUserCredentials, getAllUsers } from '../services/userService';
 import { getBotInfo } from '../services/telegramService';
@@ -30,6 +30,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
     const [driveApiKey, setDriveApiKey] = useState('');
     const [isDriveConnected, setIsDriveConnected] = useState(false);
     const [driveLoading, setDriveLoading] = useState(false);
+    const [isCloudOnly, setIsCloudOnly] = useState(false); // New state for Cloud Only Mode
 
     useEffect(() => {
         if (isOpen) {
@@ -39,6 +40,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
             setEditTelegramId(user.telegramChatId || '');
             setEditPassword('');
             setConfirmPassword('');
+            
+            // Load Cloud Only Setting
+            setIsCloudOnly(localStorage.getItem('ue_cloud_only_mode') === 'true');
             
             // Fetch Bot Info
             getBotInfo().then(info => {
@@ -89,6 +93,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
         }
     };
 
+    const handleToggleCloudOnly = () => {
+        const newValue = !isCloudOnly;
+        setIsCloudOnly(newValue);
+        localStorage.setItem('ue_cloud_only_mode', String(newValue));
+        addToast(
+            newValue ? 'Chế độ Cloud-Only' : 'Chế độ Lưu trữ Kép',
+            newValue 
+                ? 'Dữ liệu sẽ chỉ lưu trên Google Drive. Bộ nhớ máy được giải phóng.' 
+                : 'Dữ liệu sẽ lưu cả trên máy và Drive (Tốc độ cao hơn).', 
+            'info'
+        );
+        // Dispatch event to refresh library
+        window.dispatchEvent(new Event('library_updated'));
+    };
+
     const handleSyncToDrive = async () => {
         if (!isDriveConnected) {
             addToast("Chưa kết nối", "Vui lòng kết nối lại Drive.", "error");
@@ -133,11 +152,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
             if (items.length === 0) {
                 addToast('Trống', 'Không tìm thấy dữ liệu backup trên Drive.', 'info');
             } else {
-                // Save to local IndexedDB
-                for (const item of items) {
-                    await saveItem(item); 
+                // Save to local IndexedDB (Will be skipped if Cloud Only mode is checked in saveItem logic, but here we force sync usually)
+                // Actually, if Cloud Only is ON, we don't need to save to local DB.
+                if (!isCloudOnly) {
+                    for (const item of items) {
+                        await saveItem(item); 
+                    }
+                    addToast('Khôi phục xong', `Đã tải về ${items.length} mục từ Drive vào máy.`, 'success');
+                } else {
+                    addToast('Thông báo', 'Đang ở chế độ Cloud-Only. Dữ liệu đã có sẵn trên Cloud.', 'info');
                 }
-                addToast('Khôi phục xong', `Đã tải về ${items.length} mục từ Drive.`, 'success');
                 setTimeout(() => window.dispatchEvent(new Event('library_updated')), 500);
             }
         } catch (e: any) {
@@ -309,6 +333,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                                 <div className="flex items-center gap-2 text-xs text-green-400 mb-2">
                                     <CheckCircle size={14}/> Tài khoản Google đã liên kết. Dữ liệu mới sẽ tự động được lưu.
                                 </div>
+                                
+                                {/* CLOUD ONLY TOGGLE */}
+                                <div className="flex items-center justify-between bg-zinc-800/50 p-3 rounded-lg border border-zinc-700/50">
+                                    <div>
+                                        <div className="text-xs font-bold text-white mb-0.5">Chế độ chỉ dùng Cloud</div>
+                                        <div className="text-[10px] text-zinc-400">Không lưu dữ liệu vào máy, tiết kiệm bộ nhớ.</div>
+                                    </div>
+                                    <button onClick={handleToggleCloudOnly} className={`transition-colors ${isCloudOnly ? 'text-green-400' : 'text-zinc-500'}`}>
+                                        {isCloudOnly ? <ToggleRight size={32}/> : <ToggleLeft size={32}/>}
+                                    </button>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-3">
                                     <button onClick={handleSyncToDrive} disabled={isProcessing} className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-lg border border-zinc-700 flex flex-col items-center gap-1 transition-all group">
                                         <Upload size={18} className="text-zinc-400 group-hover:text-white"/>

@@ -9,8 +9,13 @@ const DB_VERSION = 2;
 
 // --- EVENT BUS HELPER ---
 const notifyLibraryChange = () => {
-    console.log("[DB] Transaction committed. Dispatching 'library_updated' event.");
+    // console.log("[DB] Transaction committed. Dispatching 'library_updated' event.");
     window.dispatchEvent(new Event('library_updated'));
+};
+
+// Helper to check Cloud Only Mode preference
+const isCloudOnlyMode = (): boolean => {
+    return localStorage.getItem('ue_cloud_only_mode') === 'true';
 };
 
 export const initDB = (): Promise<IDBDatabase> => {
@@ -42,7 +47,37 @@ export const initDB = (): Promise<IDBDatabase> => {
 };
 
 // --- Library Operations ---
-export const saveItem = async (item: LibraryItem): Promise<void> => {
+
+// NEW: Helper to check if item exists without loading everything
+export const hasItem = async (id: string): Promise<boolean> => {
+    const db = await initDB();
+    return new Promise((resolve) => {
+        const transaction = db.transaction([STORE_LIBRARY], 'readonly');
+        const store = transaction.objectStore(STORE_LIBRARY);
+        const request = store.count(id); // Lightweight check
+
+        request.onsuccess = () => {
+            resolve(request.result > 0);
+        };
+        request.onerror = () => resolve(false);
+    });
+};
+
+// UPDATED: saveItem with Cloud-Only logic
+export const saveItem = async (item: LibraryItem, skipDriveSync: boolean = false): Promise<void> => {
+  // CLOUD ONLY MODE: Bypass Local DB
+  if (driveService.isConfigured() && driveService.isAuthenticated() && isCloudOnlyMode() && !skipDriveSync) {
+      console.log("[DB] Cloud-Only Mode: Uploading directly to Drive, skipping Local DB.");
+      try {
+          await driveService.uploadItem(item);
+          notifyLibraryChange();
+          return;
+      } catch (e) {
+          console.error("[DB] Cloud upload failed, falling back to local DB for safety.", e);
+          // Fallthrough to local save if cloud fails
+      }
+  }
+
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_LIBRARY], 'readwrite');
@@ -55,9 +90,9 @@ export const saveItem = async (item: LibraryItem): Promise<void> => {
             notifyLibraryChange();
         }, 200);
         
-        // --- GOOGLE DRIVE AUTO-SYNC HOOK ---
-        // Fire and forget upload to avoid blocking UI
-        if (driveService.isConfigured() && driveService.isAuthenticated()) {
+        // --- GOOGLE DRIVE AUTO-SYNC HOOK (Standard Mode) ---
+        // Only trigger upload if we are NOT in the middle of a download sync AND NOT in cloud-only mode (handled above)
+        if (!skipDriveSync && driveService.isConfigured() && driveService.isAuthenticated() && !isCloudOnlyMode()) {
             console.log("[DB] Triggering background Drive Upload...");
             driveService.uploadItem(item).catch(err => console.warn("Background Drive Upload failed", err));
         }
@@ -77,6 +112,19 @@ export const saveItem = async (item: LibraryItem): Promise<void> => {
 };
 
 export const getAllItems = async (): Promise<LibraryItem[]> => {
+  // CLOUD ONLY MODE: Fetch directly from Drive
+  if (driveService.isConfigured() && driveService.isAuthenticated() && isCloudOnlyMode()) {
+      console.log("[DB] Cloud-Only Mode: Fetching list from Drive...");
+      try {
+          const items = await driveService.fetchAllItems();
+          // Sort manually since Drive fetch might not be sorted
+          return items.sort((a, b) => b.createdAt - a.createdAt);
+      } catch (e) {
+          console.error("[DB] Failed to fetch from Drive in Cloud-Only mode.", e);
+          return [];
+      }
+  }
+
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_LIBRARY], 'readonly');
@@ -99,6 +147,14 @@ export const getAllItems = async (): Promise<LibraryItem[]> => {
 };
 
 export const deleteItem = async (id: string): Promise<void> => {
+  // CLOUD ONLY MODE: Delete from Drive directly
+  if (driveService.isConfigured() && driveService.isAuthenticated() && isCloudOnlyMode()) {
+      console.log("[DB] Cloud-Only Mode: Deleting from Drive...");
+      await driveService.deleteItem(id);
+      notifyLibraryChange();
+      return;
+  }
+
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_LIBRARY], 'readwrite');
@@ -123,6 +179,14 @@ export const deleteItem = async (id: string): Promise<void> => {
 };
 
 export const deleteItems = async (ids: string[]): Promise<void> => {
+    // CLOUD ONLY MODE: Batch delete from Drive
+    if (driveService.isConfigured() && driveService.isAuthenticated() && isCloudOnlyMode()) {
+        console.log("[DB] Cloud-Only Mode: Batch deleting from Drive...");
+        await Promise.all(ids.map(id => driveService.deleteItem(id)));
+        notifyLibraryChange();
+        return;
+    }
+
     const db = await initDB();
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([STORE_LIBRARY], 'readwrite');
@@ -137,7 +201,6 @@ export const deleteItems = async (ids: string[]): Promise<void> => {
                 notifyLibraryChange();
             }, 200);
             
-            // Batch delete from Drive? For now, simple loop
             if (driveService.isConfigured() && driveService.isAuthenticated()) {
                 ids.forEach(id => driveService.deleteItem(id).catch(err => console.warn("Background Drive Delete failed", err)));
             }
@@ -150,7 +213,7 @@ export const deleteItems = async (ids: string[]): Promise<void> => {
 };
 
 export const getItemsByType = async (type: string): Promise<LibraryItem[]> => {
-    const all = await getAllItems();
+    const all = await getAllItems(); // getAllItems handles Cloud-Only logic
     return all.filter(i => i.type === type);
 }
 
@@ -166,9 +229,6 @@ export const saveCharacter = async (char: SavedCharacter): Promise<void> => {
         setTimeout(() => {
             notifyLibraryChange();
         }, 200);
-        // Characters are usually tied to LibraryItems in this app structure, 
-        // so explicit sync might be redundant if the LibraryItem is saved.
-        // But if needed, add Drive hook here.
         resolve();
     };
     
