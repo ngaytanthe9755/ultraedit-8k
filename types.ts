@@ -44,6 +44,7 @@ export interface StoryEpisode {
   scenes?: VideoScene[];
   seoData?: SEOData; // Added SEO Data
   thumbnail?: string; // Existing thumbnail field
+  thumbnailVariants?: string[]; // NEW: Additional thumbnail variants (e.g. 9:16 versions)
 }
 
 export interface StorySettings {
@@ -74,7 +75,8 @@ export enum ModuleType {
   THUMBNAIL = 'thumbnail',
   CHARACTER_CREATOR = 'character_creator',
   STORY_CREATOR = 'story_creator',
-  CHANNEL_BUILDER = 'channel_builder', // NEW
+  CHANNEL_BUILDER = 'channel_builder',
+  PHOTO_EDITOR = 'photo_editor', // NEW: Photo Editor Module
   LIBRARY = 'library',
   ADMIN_PANEL = 'admin_panel'
 }

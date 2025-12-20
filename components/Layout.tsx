@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, X, Layers, Image as ImageIcon, Video, Grid, LogOut, 
-  User as UserIcon, Wand2, MonitorPlay, Settings, Cloud, Download, MonitorDown, Film, Users, BookOpen, Home, Bell, LogIn, Shield, Coins, MessageCircle, HelpCircle, AlertCircle, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle, TrendingUp
+  User as UserIcon, Wand2, MonitorPlay, Settings, Cloud, Download, MonitorDown, Film, Users, BookOpen, Home, Bell, LogIn, Shield, Coins, MessageCircle, HelpCircle, AlertCircle, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle, TrendingUp, Edit2
 } from 'lucide-react';
 import { ModuleType, User, AppNotification } from '../types';
 
@@ -139,6 +139,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: ModuleType.HOME, label: 'Dashboard', icon: Home },
     { id: ModuleType.CHANNEL_BUILDER, label: 'Channel Architect', icon: TrendingUp },
     { id: ModuleType.NEW_CREATION, label: 'Vision Generator', icon: Wand2 },
+    { id: ModuleType.PHOTO_EDITOR, label: 'Photo Editor', icon: Edit2 }, // ADDED
     { id: ModuleType.CHARACTER_CREATOR, label: 'Character Lab', icon: Users },
     { id: ModuleType.STORY_CREATOR, label: 'Story Architect', icon: BookOpen },
     { id: ModuleType.VEO_IDEAS, label: 'Cinematic Scripts', icon: Video },

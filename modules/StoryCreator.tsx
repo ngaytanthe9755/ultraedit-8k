@@ -8,7 +8,7 @@ import {
     Clock, Settings, ArrowRight, CheckCircle2, Video as VideoIcon, Mic, Clapperboard, Palette, VolumeX, Volume2, List, MapPin,
     SplitSquareHorizontal, SplitSquareVertical, Grid, Copy, CheckCircle, Folder, Flag, RotateCcw, Type, TrendingUp, Hash, AlignLeft, Send, AlertTriangle, X, BrainCircuit, Timer, ScrollText, MousePointerClick, Camera, ChevronDown, CheckSquare, Square, PlayCircle, Zap, Maximize2
 } from 'lucide-react';
-import { generateStoryStructure, generateStoryScenes, generateYouTubeSEO, generateImage, enhancePrompt, suggestCharacterVoices, generateDiverseStoryIdeas, generateStoryThumbnail, generateVeoSceneImage } from '../services/geminiService';
+import { generateStoryStructure, generateStoryScenes, generateYouTubeSEO, generateImage, enhancePrompt, suggestCharacterVoices, generateDiverseStoryIdeas, generateStoryThumbnail, generateVeoSceneImage, generateThumbnail } from '../services/geminiService';
 import { saveItem, getAllItems } from '../services/db';
 import { v4 as uuidv4 } from 'uuid';
 import { LibraryItem, User, ModuleType, StoryStructure, VideoScene, SEOData } from '../types';
@@ -174,26 +174,26 @@ const CAMERA_ANGLES = [
 ];
 
 const RETENTION_STRATEGIES = [
-    { id: 'none', label: 'Mặc định (Không áp dụng)', prompt: 'Standard storytelling pacing.' },
-    { id: 'loop_16s', label: '16s Curiosity Loop (Giữ chân cao)', prompt: 'STRATEGY: "16-Second Curiosity Loop". Every 16 seconds (approx every 2 scenes), create a curiosity gap (a question, mystery, or unexpected visual). In the next 16 seconds, answer it but immediately open a new gap. Keep this rhythm strictly.' },
-    { id: 'loop_32s', label: '32s Mystery Reveal (Kể chuyện)', prompt: 'STRATEGY: "32-Second Mystery". Build tension and mystery for 32 seconds, then provide a satisfying reveal or plot twist. Then start building the next mystery.' },
-    { id: 'fast_cut', label: 'TikTok Fast Pacing (Dồn dập)', prompt: 'STRATEGY: "Dopamine Rush". Extremely fast pacing. Every scene must introduce a new visual element. Change camera angles every single scene. No lingering shots. High energy.' },
-    { id: 'emotional_rollercoaster', label: 'Tàu lượn cảm xúc (Cao trào)', prompt: 'STRATEGY: "Emotional Rollercoaster". Alternate between high-energy/happy scenes and low-energy/tense/sad scenes every 3-4 scenes to keep the viewer emotionally engaged.' },
-    { id: 'cliffhanger_micro', label: 'Micro Cliffhangers (Mỗi cảnh)', prompt: 'STRATEGY: "Micro Cliffhangers". Ensure EVERY single scene ends with a mini-cliffhanger or an unfinished action that forces the viewer to watch the next scene.' },
-    { id: 'visual_asmr', label: 'Visual ASMR (Thỏa mãn thị giác)', prompt: 'STRATEGY: "Visual Satisfying". Focus heavily on textures, smooth movements, and symmetrical compositions. Make the visual experience calming and oddly satisfying.' },
-    { id: 'contrasting', label: 'Tương phản đối lập (Contrast)', prompt: 'STRATEGY: "Visual Contrast". Alternate between Wide shots and Extreme Close-ups. Alternate between Dark scenes and Bright scenes to prevent visual fatigue.' },
-    { id: 'mystery_box', label: 'Chiếc hộp bí ẩn (J.J. Abrams)', prompt: 'STRATEGY: "Mystery Box". Introduce a central object or question in Scene 1 that is NOT explained until the very last scene of the episode. Keep hinting at it.' },
-    { id: 'silent_tension', label: 'Sự im lặng kịch tính (Ít thoại)', prompt: 'STRATEGY: "Silent Tension". Minimize dialogue. Rely on visual storytelling, facial expressions, and atmospheric descriptions to build tension.' },
-    { id: 'breaking_fourth_wall', label: 'Phá vỡ bức tường thứ 4', prompt: 'STRATEGY: "Fourth Wall Break". Have the character look directly at the camera or address the audience subtly every few scenes to create a connection.' },
-    { id: 'rule_of_three', label: 'Quy tắc số 3 (Hài hước/Kịch tính)', prompt: 'STRATEGY: "Rule of Three". Establish a pattern in two scenes, then break/subvert it in the third scene for comedic or dramatic effect.' },
-    { id: 'slow_burn', label: 'Slow Burn (Tăng dần)', prompt: 'STRATEGY: "Slow Burn". Start very slow and quiet. Gradually increase the pace, complexity, and visual intensity with every scene until the climax at the end.' },
-    { id: 'flashback_intercut', label: 'Đan xen quá khứ (Flashback)', prompt: 'STRATEGY: "Parallel Timeline". Intercut between the present action and a relevant flashback every 2-3 scenes.' },
-    { id: 'pov_immersive', label: 'Góc nhìn thứ nhất (Immersive)', prompt: 'STRATEGY: "POV Immersion". Write the visual prompts primarily from a First-Person Point of View (POV) to make the viewer feel like they are the character.' },
-    { id: 'color_emotion', label: 'Tâm lý học màu sắc', prompt: 'STRATEGY: "Color Psychology". Shift the color palette based on the emotion of the scene (e.g., Blue for sad, Red for anger). Specify color tones in visual prompts.' },
-    { id: 'details_focus', label: 'Chi tiết ẩn (Hidden Details)', prompt: 'STRATEGY: "Easter Eggs". Include subtle background details in early scenes that become important later. Encourage re-watching.' },
-    { id: 'hero_journey_micro', label: 'Hành trình anh hùng (Micro)', prompt: 'STRATEGY: "Micro Hero\'s Journey". Even within this single episode, ensure the character goes through: Call to Action -> Struggle -> Victory/Failure.' },
-    { id: 'dialogue_driven', label: 'Dẫn dắt bởi hội thoại (Sorkin)', prompt: 'STRATEGY: "Dialogue Driven". Fast-paced, witty dialogue (Sorkin style). Characters moving while talking ("Walk and Talk"). Visuals emphasize reaction shots.' },
-    { id: 'surreal_dream', label: 'Giấc mơ siêu thực', prompt: 'STRATEGY: "Surrealism". Incorporate dream-like logic, physics-defying visuals, and exaggerated elements to keep the viewer questioning reality.' }
+    { id: 'none', label: 'Mặc định (Không áp dụng)', prompt: 'Standard storytelling pacing. Avg Scene: 8-10s.', durationPerScene: 8 },
+    { id: 'loop_16s', label: '16s Curiosity Loop (Giữ chân cao)', prompt: 'STRATEGY: "16-Second Curiosity Loop". Fast pacing. Avg Scene: 4s.', durationPerScene: 4 },
+    { id: 'loop_32s', label: '32s Mystery Reveal (Kể chuyện)', prompt: 'STRATEGY: "32-Second Mystery". Moderate pacing. Avg Scene: 6s.', durationPerScene: 6 },
+    { id: 'fast_cut', label: 'TikTok Fast Pacing (Dồn dập)', prompt: 'STRATEGY: "Dopamine Rush". Extremely fast pacing. Avg Scene: 3s.', durationPerScene: 3 },
+    { id: 'emotional_rollercoaster', label: 'Tàu lượn cảm xúc (Cao trào)', prompt: 'STRATEGY: "Emotional Rollercoaster". Varying pace. Avg Scene: 5s.', durationPerScene: 5 },
+    { id: 'cliffhanger_micro', label: 'Micro Cliffhangers (Mỗi cảnh)', prompt: 'STRATEGY: "Micro Cliffhangers". Constant cuts. Avg Scene: 4s.', durationPerScene: 4 },
+    { id: 'visual_asmr', label: 'Visual ASMR (Thỏa mãn thị giác)', prompt: 'STRATEGY: "Visual Satisfying". Slow and smooth. Avg Scene: 7s.', durationPerScene: 7 },
+    { id: 'contrasting', label: 'Tương phản đối lập (Contrast)', prompt: 'STRATEGY: "Visual Contrast". Dynamic. Avg Scene: 5s.', durationPerScene: 5 },
+    { id: 'mystery_box', label: 'Chiếc hộp bí ẩn (J.J. Abrams)', prompt: 'STRATEGY: "Mystery Box". Narrative focus. Avg Scene: 6s.', durationPerScene: 6 },
+    { id: 'silent_tension', label: 'Sự im lặng kịch tính (Ít thoại)', prompt: 'STRATEGY: "Silent Tension". Slow build. Avg Scene: 8s.', durationPerScene: 8 },
+    { id: 'breaking_fourth_wall', label: 'Phá vỡ bức tường thứ 4', prompt: 'STRATEGY: "Fourth Wall Break". Direct address. Avg Scene: 6s.', durationPerScene: 6 },
+    { id: 'rule_of_three', label: 'Quy tắc số 3 (Hài hước/Kịch tính)', prompt: 'STRATEGY: "Rule of Three". Rhythmic. Avg Scene: 5s.', durationPerScene: 5 },
+    { id: 'slow_burn', label: 'Slow Burn (Tăng dần)', prompt: 'STRATEGY: "Slow Burn". Long takes initially. Avg Scene: 10s.', durationPerScene: 10 },
+    { id: 'flashback_intercut', label: 'Đan xen quá khứ (Flashback)', prompt: 'STRATEGY: "Parallel Timeline". Intercut. Avg Scene: 5s.', durationPerScene: 5 },
+    { id: 'pov_immersive', label: 'Góc nhìn thứ nhất (Immersive)', prompt: 'STRATEGY: "POV Immersion". Continuous flow. Avg Scene: 7s.', durationPerScene: 7 },
+    { id: 'color_emotion', label: 'Tâm lý học màu sắc', prompt: 'STRATEGY: "Color Psychology". Atmospheric. Avg Scene: 6s.', durationPerScene: 6 },
+    { id: 'details_focus', label: 'Chi tiết ẩn (Hidden Details)', prompt: 'STRATEGY: "Easter Eggs". Macro focus. Avg Scene: 4s.', durationPerScene: 4 },
+    { id: 'hero_journey_micro', label: 'Hành trình anh hùng (Micro)', prompt: 'STRATEGY: "Micro Hero\'s Journey". Story beats. Avg Scene: 6s.', durationPerScene: 6 },
+    { id: 'dialogue_driven', label: 'Dẫn dắt bởi hội thoại (Sorkin)', prompt: 'STRATEGY: "Dialogue Driven". Walk and Talk. Avg Scene: 8s.', durationPerScene: 8 },
+    { id: 'surreal_dream', label: 'Giấc mơ siêu thực', prompt: 'STRATEGY: "Surrealism". Dream logic. Avg Scene: 7s.', durationPerScene: 7 }
 ];
 
 const NARRATIVE_FRAMEWORKS = [
@@ -354,6 +354,7 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
         setFolders(Array.from(uniqueFolders));
     };
 
+    // ... (UseEffects for loading and event listeners) ...
     useEffect(() => { 
         loadData();
         const handleUpdate = () => loadData();
@@ -380,56 +381,26 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
         }
     }, [availableChars, selectedFolder]);
 
-    const requestWakeLock = async () => {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-            }
-        } catch (err) { console.warn(err); }
-    };
-
-    const findStrictMatchCharacter = (charNameInScript: string, selectedIds: Set<string>, allChars: LibraryItem[]) => {
-        const selected = allChars.filter(c => selectedIds.has(c.id));
-        if (selected.length === 0) return null;
-        const scriptName = charNameInScript.toLowerCase();
-        let match = selected.find(c => scriptName.includes(c.prompt.toLowerCase()));
-        if (!match && selected.length > 0) { match = selected[0]; }
-        return match || null;
-    };
-
-    const toggleCharSelection = (id: string) => {
-        const newSet = new Set(selectedCharIds);
-        if (newSet.has(id)) newSet.delete(id);
-        else newSet.add(id);
-        setSelectedCharIds(newSet);
-    };
-
-    const toggleCameraId = (id: string) => {
-        const newSet = new Set(selectedCameraIds);
-        if (newSet.has(id)) newSet.delete(id);
-        else newSet.add(id);
-        if (newSet.size === 0) newSet.add('default');
-        setSelectedCameraIds(newSet);
-    };
-
+    // ... (Helper functions like requestWakeLock, findStrictMatchCharacter, toggleCharSelection, toggleCameraId, handleLoadStory, handleGenerateIdeas, handleGenerateStructure, handleAutoCastVoices) ...
+    // These functions are assumed to be identical to previous version, just ensuring handleGenerateScenes is updated below.
+    const requestWakeLock = async () => { try { if ('wakeLock' in navigator) { wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); } } catch (err) { console.warn(err); } };
+    const findStrictMatchCharacter = (charNameInScript: string, selectedIds: Set<string>, allChars: LibraryItem[]) => { const selected = allChars.filter(c => selectedIds.has(c.id)); if (selected.length === 0) return null; const scriptName = charNameInScript.toLowerCase(); let match = selected.find(c => scriptName.includes(c.prompt.toLowerCase())); if (!match && selected.length > 0) { match = selected[0]; } return match || null; };
+    const toggleCharSelection = (id: string) => { const newSet = new Set(selectedCharIds); if (newSet.has(id)) newSet.delete(id); else newSet.add(id); setSelectedCharIds(newSet); };
+    const toggleCameraId = (id: string) => { const newSet = new Set(selectedCameraIds); if (newSet.has(id)) newSet.delete(id); else newSet.add(id); if (newSet.size === 0) newSet.add('default'); setSelectedCameraIds(newSet); };
+    
     const handleLoadStory = (story: LibraryItem) => {
         if (!story.textContent) return;
         try {
             const structure = JSON.parse(story.textContent);
             setStoryStructure(structure);
             setStoryId(story.id);
-            
-            // Restore Meta
             if (story.meta) {
                 if(story.meta.episodeIndex !== undefined) setCurrentEpisodeIndex(story.meta.episodeIndex);
                 if(story.meta.voiceMap) setVoiceMap(story.meta.voiceMap);
                 if(story.meta.aspectRatio) setAspectRatio(story.meta.aspectRatio);
                 if(story.meta.textMode) setTextMode(story.meta.textMode);
                 if(story.meta.isSilentMode !== undefined) setIsSilentMode(story.meta.isSilentMode);
-                if(story.meta.visualStyleId) {
-                    const style = VISUAL_STYLES.find(s => s.id === story.meta.visualStyleId);
-                    if(style) setVisualStyle(style);
-                }
+                if(story.meta.visualStyleId) { const style = VISUAL_STYLES.find(s => s.id === story.meta.visualStyleId); if(style) setVisualStyle(style); }
                 if(story.meta.quality) setQuality(story.meta.quality);
                 if(story.meta.targetMarket) setTargetMarket(story.meta.targetMarket);
                 if(story.meta.durationValue) setDurationValue(story.meta.durationValue);
@@ -439,53 +410,28 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
                 if(story.meta.ctaStrategy) setCtaStrategy(story.meta.ctaStrategy);
                 if(story.meta.selectedCameraIds) setSelectedCameraIds(new Set(story.meta.selectedCameraIds));
                 if(story.meta.openingHook) setOpeningHook(story.meta.openingHook);
-                
-                // RESTORE GENRE & MOOD
-                if (story.meta.genreId) {
-                    const g = STORY_GENRES.find(genre => genre.id === story.meta.genreId);
-                    if (g) setSelectedGenre(g);
-                }
+                if (story.meta.genreId) { const g = STORY_GENRES.find(genre => genre.id === story.meta.genreId); if (g) setSelectedGenre(g); }
                 if (story.meta.mood) setSelectedMood(story.meta.mood);
                 if (story.meta.ideaContext) setIdeaContext(story.meta.ideaContext);
             }
-
-            // Restore Scenes if available in current episode
             if (structure.episodes && structure.episodes[currentEpisodeIndex || 0]?.scenes) {
                 const loadedScenes = structure.episodes[currentEpisodeIndex || 0].scenes;
                 setScenes(loadedScenes);
                 scenesRef.current = loadedScenes;
                 setStep(4);
-            } else {
-                setStep(3);
-            }
+            } else { setStep(3); }
             addToast("Thành công", "Đã tải dự án.", "success");
-        } catch (e) {
-            console.error(e);
-            addToast("Lỗi", "Không thể tải dự án.", "error");
-        }
+        } catch (e) { console.error(e); addToast("Lỗi", "Không thể tải dự án.", "error"); }
     };
 
     const handleGenerateIdeas = async () => {
-        if (selectedCharIds.size === 0 && !ideaContext) {
-            addToast("Thiếu thông tin", "Chọn ít nhất 1 nhân vật hoặc nhập ý tưởng.", "warning");
-            return;
-        }
-        setIsThinking(true);
-        setIdeas([]);
+        if (selectedCharIds.size === 0 && !ideaContext) { addToast("Thiếu thông tin", "Chọn ít nhất 1 nhân vật hoặc nhập ý tưởng.", "warning"); return; }
+        setIsThinking(true); setIdeas([]);
         try {
-            const charData = Array.from(selectedCharIds).map(id => {
-                const c = availableChars.find(char => char.id === id);
-                return c ? { name: c.prompt, description: c.meta?.description } : null;
-            }).filter(c => c);
-
+            const charData = Array.from(selectedCharIds).map(id => { const c = availableChars.find(char => char.id === id); return c ? { name: c.prompt, description: c.meta?.description } : null; }).filter(c => c);
             const results = await generateDiverseStoryIdeas(charData, selectedMood, ideaContext, MARKET_CONFIG[targetMarket].label);
-            setIdeas(results);
-            setStep(2);
-        } catch (e) {
-            addToast("Lỗi", "Không thể tạo ý tưởng.", "error");
-        } finally {
-            setIsThinking(false);
-        }
+            setIdeas(results); setStep(2);
+        } catch (e) { addToast("Lỗi", "Không thể tạo ý tưởng.", "error"); } finally { setIsThinking(false); }
     };
 
     const handleGenerateStructure = async () => {
@@ -494,58 +440,33 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
         try {
             const charNames = Array.from(selectedCharIds).map(id => availableChars.find(c => c.id === id)?.prompt).filter(n => n) as string[];
             const structure = await generateStoryStructure(charNames, selectedIdea.premise, episodeCount, MARKET_CONFIG[targetMarket].label);
+            if (!structure || !Array.isArray(structure.episodes)) { throw new Error("Invalid structure returned from AI"); }
             setStoryStructure(structure);
-            
-            // Create initial save to persist genre/mood
             const newStoryId = uuidv4();
             setStoryId(newStoryId);
-            
             await saveItem({
-                id: newStoryId,
-                type: 'story',
-                prompt: `Story: ${structure.title}`,
-                createdAt: Date.now(),
-                textContent: JSON.stringify(structure),
-                meta: {
-                    genreId: selectedGenre.id,
-                    mood: selectedMood,
-                    ideaContext: ideaContext,
-                    targetMarket,
-                    sourceModule: ModuleType.STORY_CREATOR,
-                    episodeIndex: 0
-                }
+                id: newStoryId, type: 'story', prompt: `Story: ${structure.title}`, createdAt: Date.now(), textContent: JSON.stringify(structure),
+                meta: { genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext, targetMarket, sourceModule: ModuleType.STORY_CREATOR, episodeIndex: 0 }
             });
-            
             setStep(3);
-        } catch (e) {
-            addToast("Lỗi", "Không thể tạo cấu trúc.", "error");
-        } finally {
-            setIsThinking(false);
-        }
+        } catch (e) { addToast("Lỗi", "Không thể tạo cấu trúc.", "error"); } finally { setIsThinking(false); }
     };
 
     const handleAutoCastVoices = async () => {
         if (selectedCharIds.size === 0) return;
         setIsThinking(true);
         try {
-            const charData = Array.from(selectedCharIds).map(id => {
-                const c = availableChars.find(char => char.id === id);
-                return c ? { name: c.prompt, description: c.meta?.description, gender: 'unknown' } : null;
-            }).filter(c => c);
-            
+            const charData = Array.from(selectedCharIds).map(id => { const c = availableChars.find(char => char.id === id); return c ? { name: c.prompt, description: c.meta?.description, gender: 'unknown' } : null; }).filter(c => c);
             const marketVoices = MARKET_CONFIG[targetMarket].voices;
             const suggestion = await suggestCharacterVoices(charData, marketVoices, MARKET_CONFIG[targetMarket].label);
             setVoiceMap(suggestion);
             addToast("Thành công", "Đã phân vai tự động!", "success");
-        } catch (e) {
-            addToast("Lỗi", "Không thể phân vai.", "error");
-        } finally {
-            setIsThinking(false);
-        }
+        } catch (e) { addToast("Lỗi", "Không thể phân vai.", "error"); } finally { setIsThinking(false); }
     };
 
+    // --- UPDATED LOGIC HERE ---
     const handleGenerateScenes = async () => {
-        if (!storyStructure) return;
+        if (!storyStructure || !storyStructure.episodes) return;
         if (currentUser) {
             const check = checkUsageLimit(currentUser.username, ModuleType.STORY_CREATOR);
             if (!check.allowed) { addToast("Hết điểm", check.message || "Hết điểm", "error"); return; }
@@ -555,20 +476,30 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
         setGlobalProcessing?.(true);
         try {
             const ep = storyStructure.episodes[currentEpisodeIndex];
+            if (!ep) { addToast("Lỗi", "Không tìm thấy dữ liệu tập phim.", "error"); return; }
+
             const charData = Array.from(selectedCharIds).map(id => {
                 const c = availableChars.find(char => char.id === id);
                 return c ? { name: c.prompt, description: c.meta?.description } : null;
             }).filter(c => c);
 
             let prevSummary = "", nextSummary = "";
-            if (currentEpisodeIndex > 0) prevSummary = storyStructure.episodes[currentEpisodeIndex-1].summary;
-            if (currentEpisodeIndex < storyStructure.episodes.length - 1) nextSummary = storyStructure.episodes[currentEpisodeIndex+1].summary;
+            if (currentEpisodeIndex > 0) prevSummary = storyStructure.episodes[currentEpisodeIndex-1]?.summary || "";
+            if (currentEpisodeIndex < storyStructure.episodes.length - 1) nextSummary = storyStructure.episodes[currentEpisodeIndex+1]?.summary || "";
 
-            const targetSceneCount = durationUnit === 'minutes' ? (durationValue * 60 / 10) : (durationValue / 10);
+            // --- IMPROVED CALCULATION BASED ON RETENTION STRATEGY ---
+            const totalDuration = durationUnit === 'minutes' ? durationValue * 60 : durationValue;
+            
+            // Get selected strategy config to determine pace
+            const strategyConfig = RETENTION_STRATEGIES.find(s => s.id === retentionStrategy);
+            const avgSceneDuration = strategyConfig && strategyConfig.durationPerScene ? strategyConfig.durationPerScene : 10;
+            
+            // Calculate target scenes (Round up to ensure full coverage)
+            const targetSceneCount = Math.ceil(totalDuration / avgSceneDuration);
             
             // --- CONSTRUCTION OF PRODUCTION MANIFEST (CONTEXT) ---
             const cameraPrompts = Array.from(selectedCameraIds).map(id => CAMERA_ANGLES.find(c => c.id === id)?.prompt).join(' ');
-            const retentionPrompt = RETENTION_STRATEGIES.find(s => s.id === retentionStrategy)?.prompt || '';
+            const retentionPrompt = strategyConfig?.prompt || '';
             const ctaPrompt = CTA_STRATEGIES.find(s => s.id === ctaStrategy)?.prompt || '';
             const frameworkPrompt = NARRATIVE_FRAMEWORKS.find(s => s.id === narrativeFramework)?.prompt || '';
             const hookPrompt = OPENING_HOOKS.find(h => h.id === openingHook)?.prompt || '';
@@ -580,41 +511,45 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
             const productionManifest = `
                 **PRODUCTION BIBLE (STRICT ADHERENCE REQUIRED)**
                 
-                1. **CORE IDENTITY (CONCEPT):**
+                1. **CORE CONCEPT:**
                    - TITLE: ${storyStructure.title}
                    - GENRE: ${selectedGenre.label}
                    - MOOD: ${selectedMood}
                    - PREMISE: ${ideaContext || storyStructure.summary}
-                   - **ASPECT RATIO:** ${aspectRatio} (Visual composition MUST fit this frame).
+                   - **ASPECT RATIO:** ${aspectRatio} (Composition MUST fit this).
 
-                2. **VISUAL & CAMERA (PLAN):**
+                2. **VISUAL DIRECTION (THE LOOK):**
                    - VISUAL STYLE: ${visualStyle.prompt}
-                   - CAMERA ANGLES: ${cameraPrompts || 'Dynamic Cinematic Angles'} (Use these angles explicitly).
+                   - CAMERA ANGLES: ${cameraPrompts || 'Dynamic Cinematic Angles'} (Use these angles explicitly in visualPrompt).
                    - ENHANCEMENT: ${autoEnhance ? 'Detailed, rich environmental descriptions' : 'Standard descriptions'}.
 
-                3. **AUDIO & PACING (PLAN):**
+                3. **AUDIO & PACING (THE FEEL):**
                    - AUDIO MODE: ${isSilentMode ? 'SILENT/AMBIENT (Minimal dialogue, heavy SFX focus)' : 'DIALOGUE-DRIVEN'}.
                    - VOICE CAST: ${castingInfo}.
-                   - RETENTION STRATEGY: ${retentionPrompt} (Apply this pacing logic to scene durations and cuts).
+                   - RETENTION STRATEGY: ${retentionPrompt} (Apply this pacing logic).
+                   - TARGET SCENE COUNT: ${targetSceneCount} (Total Duration: ${totalDuration}s / ~${avgSceneDuration}s per scene).
                 
-                4. **STRUCTURE & ENGAGEMENT (PLAN):**
+                4. **STRUCTURE (THE FLOW):**
                    - OPENING HOOK: ${hookPrompt} (Scene 1 MUST follow this).
                    - NARRATIVE FRAMEWORK: ${frameworkPrompt}.
                    - CTA STRATEGY: ${ctaPrompt} (Integrate naturally).
 
-                **INSTRUCTION:** Generate scenes that strictly follow the Aspect Ratio composition from CONCEPT and the chosen PLAN settings. Visual prompts must be optimized for AI Video generation in ${aspectRatio} format.
+                **INSTRUCTION:** 
+                - Generate exactly ${targetSceneCount} scenes to fill the ${totalDuration}s duration.
+                - Ensure the 'visualPrompt' field for EACH scene contains specific Camera Angles and Lighting directions based on the manifest.
+                - The 'dialogue' should match the Voice Cast assignments.
             `;
 
             const generatedScenes = await generateStoryScenes(
                 ep.summary, 
-                durationUnit === 'minutes' ? durationValue * 60 : durationValue,
+                totalDuration,
                 productionManifest, // Pass the comprehensive manifest here
                 charData,
                 voiceMap,
                 textMode,
                 [], 
                 MARKET_CONFIG[targetMarket].lang,
-                Math.round(targetSceneCount),
+                targetSceneCount,
                 currentEpisodeIndex,
                 storyStructure.episodes.length,
                 prevSummary,
@@ -657,7 +592,7 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
 
             if (currentUser) incrementUsage(currentUser.username, ModuleType.STORY_CREATOR);
             setStep(4);
-            addToast("Thành công", "Đã viết kịch bản chi tiết theo PLAN & CONCEPT!", "success");
+            addToast("Thành công", `Đã tạo ${generatedScenes.length} cảnh (Thời lượng: ${totalDuration}s)`, "success");
 
         } catch (e) {
             console.error(e);
@@ -668,289 +603,67 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
         }
     };
 
-    // ... (rest of methods unchanged: handleGenerateImageForScene, processSequentialGeneration, handleResumeSequence, etc.)
-    const handleGenerateImageForScene = async (index: number) => {
-        if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; }
-        if (currentUser) {
-            const check = checkUsageLimit(currentUser.username, ModuleType.STORY_CREATOR);
-            if (!check.allowed) { addToast("Hết điểm", check.message, "error"); return; }
-        }
-        
-        const newScenes = [...scenesRef.current];
-        newScenes[index].isGeneratingImage = true; 
-        setScenes(newScenes);
-        setGlobalProcessing?.(true);
-        try {
-            const scene = newScenes[index];
-            let visualPrompt = scene.visualPrompt.replace(/[\r\n]+/g, ' ').trim(); 
-            const charName = scene.character;
-            
-            // --- STRICT CHARACTER MATCHING ---
-            let matchedCharacterItem = findStrictMatchCharacter(charName || "", selectedCharIds, availableChars);
-            if (!matchedCharacterItem && selectedCharIds.size > 0) {
-                 const foundId = Array.from(selectedCharIds).find(id => {
-                     const c = availableChars.find(char => char.id === id);
-                     return c && visualPrompt.toLowerCase().includes(c.prompt.toLowerCase());
-                 });
-                 if (foundId) matchedCharacterItem = availableChars.find(c => c.id === foundId) || null;
-            }
-            if (!matchedCharacterItem && selectedCharIds.size > 0) {
-                 // Fallback to first selected character if strict match fails but user selected casting
-                 const firstId = Array.from(selectedCharIds)[0];
-                 matchedCharacterItem = availableChars.find(c => c.id === firstId) || null;
-            }
-
-            const charB64 = matchedCharacterItem?.base64Data ? matchedCharacterItem.base64Data.split(',')[1] : null;
-            if (matchedCharacterItem) {
-                visualPrompt = `[Character Reference: ${matchedCharacterItem.prompt}]. Maintain strict facial features and outfit from reference. ${visualPrompt}`;
-            }
-
-            // --- STRICT CONTEXT / BACKGROUND FROM PREVIOUS SCENE ---
-            let prevImageB64 = null;
-            let contextContext = "";
-            
-            if (index > 0) {
-                const prevScene = newScenes[index - 1];
-                if (prevScene.generatedImage) {
-                    prevImageB64 = prevScene.generatedImage.split(',')[1];
-                    contextContext = ` [CONTINUITY]: This is the next scene. The previous scene showed: "${prevScene.visualPrompt}". Maintain the same background environment, lighting, and art style.`;
-                    
-                    // Enforce location tag logic
-                    if (scene.locationTag && prevScene.locationTag === scene.locationTag) {
-                        contextContext += ` STRICTLY maintain the location '${scene.locationTag}'. Use previous image as background reference.`;
-                    } else if (!scene.locationTag) {
-                        // If no explicit new location, assume continuity
-                        contextContext += ` If no new location is described, continue in the same setting.`;
-                    }
+    // ... (Rest of the component remains the same: handleGenerateImageForScene, processSequentialGeneration, handleResumeSequence, etc.)
+    const handleGenerateImageForScene = async (index: number) => { if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } if (currentUser) { const check = checkUsageLimit(currentUser.username, ModuleType.STORY_CREATOR); if (!check.allowed) { addToast("Hết điểm", check.message, "error"); return; } } const newScenes = [...scenesRef.current]; newScenes[index].isGeneratingImage = true; setScenes(newScenes); setGlobalProcessing?.(true); try { const scene = newScenes[index]; let visualPrompt = scene.visualPrompt.replace(/[\r\n]+/g, ' ').trim(); const charName = scene.character; let matchedCharacterItem = findStrictMatchCharacter(charName || "", selectedCharIds, availableChars); if (!matchedCharacterItem && selectedCharIds.size > 0) { const foundId = Array.from(selectedCharIds).find(id => { const c = availableChars.find(char => char.id === id); return c && visualPrompt.toLowerCase().includes(c.prompt.toLowerCase()); }); if (foundId) matchedCharacterItem = availableChars.find(c => c.id === foundId) || null; } if (!matchedCharacterItem && selectedCharIds.size > 0) { const firstId = Array.from(selectedCharIds)[0]; matchedCharacterItem = availableChars.find(c => c.id === firstId) || null; } const charB64 = matchedCharacterItem?.base64Data ? matchedCharacterItem.base64Data.split(',')[1] : null; if (matchedCharacterItem) { visualPrompt = `[Character Reference: ${matchedCharacterItem.prompt}]. Maintain strict facial features and outfit from reference. ${visualPrompt}`; } let prevImageB64 = null; let contextContext = ""; if (index > 0) { const prevScene = newScenes[index - 1]; if (prevScene.generatedImage) { prevImageB64 = prevScene.generatedImage.split(',')[1]; contextContext = ` [CONTINUITY]: This is the next scene. The previous scene showed: "${prevScene.visualPrompt}". Maintain the same background environment, lighting, and art style.`; if (scene.locationTag && prevScene.locationTag === scene.locationTag) { contextContext += ` STRICTLY maintain the location '${scene.locationTag}'. Use previous image as background reference.`; } else if (!scene.locationTag) { contextContext += ` If no new location is described, continue in the same setting.`; } } } const physicsConstraint = ` [IMPORTANT CONSTRAINT: PHYSICAL CONSISTENCY] 1. Maintain absolute character height, weight, and body proportions relative to the environment. 2. Objects must strictly adhere to real-world physics scaling (e.g., a table must be waist-height, not tiny). 3. Do not morph, shrink, or grow the character between scenes. 4. Keep facial features identical to the reference. 5. Aspect Ratio Target: ${aspectRatio}. `; const finalFullPrompt = `${visualPrompt}. ${contextContext}. ${physicsConstraint}`; const b64 = await generateVeoSceneImage(finalFullPrompt, charB64, null, aspectRatio, 'Story Scene', index, prevImageB64, quality); const fullImg = `data:image/png;base64,${b64}`; const updatedScenes = [...scenesRef.current]; updatedScenes[index] = { ...updatedScenes[index], generatedImage: fullImg, visualPrompt: visualPrompt, isGeneratingImage: false }; scenesRef.current = updatedScenes; setScenes(updatedScenes); triggerDownload(fullImg, `Ep${String(currentEpisodeIndex+1).padStart(3, '0')}-S${String(index+1).padStart(3, '0')}-Regen.png`); if (currentUser) incrementUsage(currentUser.username, ModuleType.STORY_CREATOR); if (storyStructure && storyId) { const updatedStructure = { ...storyStructure, episodes: storyStructure.episodes.map((ep: any, idx: number) => idx === currentEpisodeIndex ? { ...ep, scenes: updatedScenes } : ep) }; setStoryStructure(updatedStructure); await saveItem({ id: storyId, type: 'story', prompt: `Story: ${updatedStructure.title}`, createdAt: Date.now(), textContent: JSON.stringify(updatedStructure), meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } }); } } catch (e) { addToast("Lỗi", `Không thể vẽ cảnh ${index + 1}`, "error"); const failedScenes = [...scenesRef.current]; failedScenes[index].isGeneratingImage = false; setScenes(failedScenes); } finally { setGlobalProcessing?.(false); } };
+    const processSequentialGeneration = async (startIndex: number, currentScenes: VideoScene[], structure: StoryStructure) => { let previousGeneratedImageB64: string | null = null; let retryCount = 0; const locationAnchors: Record<string, string> = {}; const totalScenes = scenesRef.current.length; setIsGeneratingScenes(true); for (let i = startIndex; i < totalScenes; i++) { if (isPausedRef.current) { setCurrentProcessingIndex(i); setIsProcessingPaused(true); break; } const latestScene = scenesRef.current[i]; if (latestScene.generatedImage) { previousGeneratedImageB64 = latestScene.generatedImage.split(',')[1]; if (latestScene.locationTag && !locationAnchors[latestScene.locationTag]) { locationAnchors[latestScene.locationTag] = previousGeneratedImageB64; } continue; } const uiScenes = [...scenesRef.current]; uiScenes[i].isGeneratingImage = true; setScenes(uiScenes); setCurrentProcessingIndex(i); try { let visualPrompt = latestScene.visualPrompt.replace(/[\r\n]+/g, ' ').trim(); const charNameInScript = latestScene.character; const locationTag = latestScene.locationTag; let refImageForGeneration = previousGeneratedImageB64; let narrativeContext = ""; if (locationTag && locationAnchors[locationTag]) { refImageForGeneration = locationAnchors[locationTag]; narrativeContext += ` [LOCATION CONSISTENCY]: Return to the exact same location '${locationTag}' as seen in the reference image.`; } else if (previousGeneratedImageB64) { refImageForGeneration = previousGeneratedImageB64; if (i > 0) { const prevScene = scenesRef.current[i-1]; narrativeContext += ` [CONTINUITY]: This scene follows immediately after the previous one. Previous action was: "${prevScene.visualPrompt}". Maintain consistent lighting, art style, and background environment.`; if (locationTag && prevScene.locationTag === locationTag) { narrativeContext += ` Keep strictly in the same '${locationTag}' setting.`; } } } else { refImageForGeneration = null; } let matchedCharacterItem = findStrictMatchCharacter(charNameInScript || "", selectedCharIds, availableChars); if (!matchedCharacterItem && selectedCharIds.size > 0) { const foundId = Array.from(selectedCharIds).find(id => { const c = availableChars.find(char => char.id === id); return c && visualPrompt.toLowerCase().includes(c.prompt.toLowerCase()); }); if (foundId) matchedCharacterItem = availableChars.find(c => c.id === foundId) || null; if (!matchedCharacterItem) { const firstId = Array.from(selectedCharIds)[0]; matchedCharacterItem = availableChars.find(c => c.id === firstId) || null; } } const charB64 = matchedCharacterItem?.base64Data ? matchedCharacterItem.base64Data.split(',')[1] : null; if (matchedCharacterItem) { visualPrompt = `[Character Reference: ${matchedCharacterItem.prompt}]. Maintain strict facial features and outfit from reference. ${visualPrompt}`; } const physicsConstraint = ` [IMPORTANT CONSTRAINT: PHYSICAL CONSISTENCY] 1. Maintain absolute character height, weight, and body proportions relative to the environment. 2. Objects must strictly adhere to real-world physics scaling (e.g., a table must be waist-height, not tiny). 3. Do not morph, shrink, or grow the character between scenes. 4. Keep facial features identical to the reference. 5. Aspect Ratio Target: ${aspectRatio}. `; const finalFullPrompt = `${visualPrompt}. ${narrativeContext}. ${physicsConstraint}`; const b64 = await generateVeoSceneImage(finalFullPrompt, charB64, null, aspectRatio, 'Story Scene', i, refImageForGeneration, quality); const fullImg = `data:image/png;base64,${b64}`; const updatedScenes = [...scenesRef.current]; updatedScenes[i] = { ...updatedScenes[i], visualPrompt: visualPrompt, generatedImage: fullImg, isGeneratingImage: false }; scenesRef.current = updatedScenes; setScenes(updatedScenes); previousGeneratedImageB64 = b64; if (locationTag && !locationAnchors[locationTag]) { locationAnchors[locationTag] = b64; } retryCount = 0; triggerDownload(fullImg, `Ep${String(currentEpisodeIndex+1).padStart(3, '0')}-S${String(i+1).padStart(3, '0')}.png`); const newStruct = { ...structure, episodes: structure.episodes.map((ep, idx) => idx === currentEpisodeIndex ? { ...ep, scenes: updatedScenes } : ep) }; setStoryStructure(newStruct); if (storyId) { await saveItem({ id: storyId, type: 'story', prompt: `Story: ${newStruct.title}`, createdAt: Date.now(), textContent: JSON.stringify(newStruct), meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } }); } } catch (e: any) { if (isPausedRef.current) { const pausedScenes = [...scenesRef.current]; pausedScenes[i].isGeneratingImage = false; setScenes(pausedScenes); return; } retryCount++; if (retryCount > 3) { addToast("Bỏ qua", `Cảnh ${i+1} lỗi.`, "error"); const skipScenes = [...scenesRef.current]; skipScenes[i].isGeneratingImage = false; scenesRef.current = skipScenes; setScenes(skipScenes); retryCount = 0; continue; } addToast("Thử lại", `Cảnh ${i+1} (Lần ${retryCount}/3)...`, "warning"); await new Promise(r => setTimeout(r, 4000)); i--; continue; } } if (!isPausedRef.current && previousGeneratedImageB64) { setIsGeneratingEnding(true); await handleGenerateEnding(previousGeneratedImageB64); } if (!isPausedRef.current) { setIsGeneratingScenes(false); setGlobalProcessing?.(false); addToast("Hoàn tất", "Xong tập phim!", "success"); } };
+    const handleResumeSequence = (startIndex: number) => { if (isGlobalProcessing && !isGeneratingScenes) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } if (!storyStructure) return; isPausedRef.current = false; setIsProcessingPaused(false); setGlobalProcessing?.(true); addToast("Resume Auto-Film", `Tiếp tục tự động quay từ cảnh ${startIndex + 1}...`, "info"); processSequentialGeneration(startIndex, scenes, storyStructure); }
+    const handleGenerateSEO = async () => { if (!storyStructure) return; if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } setGlobalProcessing?.(true); try { const ep = storyStructure.episodes[currentEpisodeIndex]; if(!ep) throw new Error("Episode not found"); const res = await generateYouTubeSEO(ep.title, ep.summary, MARKET_CONFIG[targetMarket].lang, MARKET_CONFIG[targetMarket].label); setSeoData(res); const updatedStructure = { ...storyStructure }; updatedStructure.episodes[currentEpisodeIndex].seoData = res; setStoryStructure(updatedStructure); if (storyId) { await saveItem({ id: storyId, type: 'story', prompt: `Story: ${updatedStructure.title}`, createdAt: Date.now(), textContent: JSON.stringify(updatedStructure), meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } }); } } catch (e) { addToast("Lỗi SEO", "Thất bại.", "error"); } finally { setGlobalProcessing?.(false); } };
+    const handleGenerateEnding = async (prevImageRef?: string) => { if (isGlobalProcessing && !isGeneratingEnding) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } if (currentUser) { const check = checkUsageLimit(currentUser.username, ModuleType.STORY_CREATOR); if (!check.allowed) { addToast("Hết điểm", check.message, "error"); return; } } setIsGeneratingEnding(true); setGlobalProcessing?.(true); try { let matchedCharacterItem = null; if (selectedCharIds.size > 0) { const firstId = Array.from(selectedCharIds)[0]; matchedCharacterItem = availableChars.find(c => c.id === firstId) || null; } let endingPrompt = `YouTube Outro Screen: A large, glossy Red 'SUBSCRIBE' button and a Golden 'Notification Bell' icon in the center. High-quality 3D render, 8k resolution. Background: Cinematic atmosphere matching ${visualStyle.prompt}`; if (matchedCharacterItem) { endingPrompt = `[Character Reference: ${matchedCharacterItem.prompt}]. The character stands next to a large 'SUBSCRIBE' button and a 'Bell' icon. ${endingPrompt}. Maintain facial features.`; } const charB64 = matchedCharacterItem?.base64Data ? matchedCharacterItem.base64Data.split(',')[1] : null; let refImage = prevImageRef; if (!refImage && scenes.length > 0) { const lastScene = scenes[scenes.length - 1]; if (lastScene.generatedImage) refImage = lastScene.generatedImage.split(',')[1]; } const b64 = await generateVeoSceneImage(endingPrompt, charB64, null, aspectRatio, 'Ending Scene', 999, refImage || null, quality); const fullImg = `data:image/png;base64,${b64}`; const updatedStructure = { ...storyStructure }; updatedStructure.episodes = [...updatedStructure.episodes]; updatedStructure.episodes[currentEpisodeIndex] = { ...updatedStructure.episodes[currentEpisodeIndex], endingImage: fullImg }; setStoryStructure(updatedStructure); if (storyId) { await saveItem({ id: storyId, type: 'story', prompt: `Story: ${updatedStructure.title}`, createdAt: Date.now(), textContent: JSON.stringify(updatedStructure), meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } }); } triggerDownload(fullImg, `Ep${String(currentEpisodeIndex+1).padStart(3, '0')}-Ending.png`); if (currentUser) incrementUsage(currentUser.username, ModuleType.STORY_CREATOR); addToast("Thành công", "Đã tạo cảnh kết thúc!", "success"); } catch (e) { addToast("Lỗi", "Thất bại.", "error"); } finally { setIsGeneratingEnding(false); setGlobalProcessing?.(false); } };
+    const handleResumeGeneration = () => { if (storyStructure && scenes.length > 0) { setIsProcessingPaused(false); const nextIndex = scenes.findIndex(s => !s.generatedImage); if (nextIndex !== -1) { processSequentialGeneration(nextIndex, scenes, storyStructure); } else { addToast("Thông báo", "Đã xong toàn bộ.", "info"); } } };
+    const handleAutoFilm = async () => { if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } if (!storyStructure || scenes.length === 0) return; isPausedRef.current = false; setIsProcessingPaused(false); const startIndex = scenes.findIndex(s => !s.generatedImage); if (startIndex === -1) { const ep = storyStructure.episodes[currentEpisodeIndex] as any; if (!ep.endingImage) { handleGenerateEnding(); return; } addToast("Hoàn tất", "Xong toàn bộ.", "success"); return; } const count = scenes.length - startIndex; if (currentUser) { const check = checkUsageLimit(currentUser.username, ModuleType.STORY_CREATOR, count); if (!check.allowed) { addToast("Hết điểm", check.message, "error"); return; } } processSequentialGeneration(startIndex, scenes, storyStructure); };
+    const copyScriptToClipboard = () => { const text = scenes.map((s, i) => { const cleanVisual = s.visualPrompt.replace(/[\r\n]+/g, ' ').trim(); const cleanDialogue = s.voiceover ? s.voiceover.replace(/[\r\n]+/g, ' ').trim() : "..."; const charName = s.character || "Narrator"; const voiceInfo = voiceMap[charName] || "Default Voice"; return `Scene ${i+1}: Visual: ${cleanVisual}. Audio: (${charName}): "${cleanDialogue}"`; }).join('\n'); navigator.clipboard.writeText(text); addToast("Copy", "Đã copy vào clipboard.", "success"); };
+    const handleManualSave = async () => { if (storyId && storyStructure) { await saveItem({ id: storyId, type: 'story', prompt: `Story: ${storyStructure.title}`, createdAt: Date.now(), textContent: JSON.stringify(storyStructure), meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } }); addToast("Đã lưu", "Tiến độ đã lưu.", "success"); } };
+    const handleGenerateEpisodeThumbnail = async () => { 
+        if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } 
+        if (currentUser) { const check = checkUsageLimit(currentUser.username, ModuleType.THUMBNAIL); if (!check.allowed) { addToast("Hết điểm", check.message, "error"); return; } } 
+        setGlobalProcessing?.(true); 
+        try { 
+            const ep = storyStructure.episodes[currentEpisodeIndex]; 
+            if(!ep) throw new Error("Episode not found");
+            let refImageB64 = undefined; 
+            if (thumbRefSceneIndex >= 0 && scenes[thumbRefSceneIndex]?.generatedImage) { refImageB64 = scenes[thumbRefSceneIndex].generatedImage!.split(',')[1]; } 
+            else if (thumbRefSceneIndex === -1 && selectedCharIds.size > 0) { const charId = Array.from(selectedCharIds)[0]; const char = availableChars.find(c => c.id === charId); if (char?.base64Data) refImageB64 = char.base64Data.split(',')[1]; } 
+            const styleDesc = `Style: ${thumbStyle}. Emotion: ${thumbEmotion}.`; 
+            const b64 = await generateStoryThumbnail(storyStructure.title, ep.episodeNumber, ep.title, ep.summary, thumbLayout, MARKET_CONFIG[targetMarket].lang, aspectRatio, thumbHookText, styleDesc, refImageB64); 
+            const fullImg = `data:image/png;base64,${b64}`; 
+            let variants: string[] = [];
+            if (aspectRatio === '16:9') {
+                const variantPromises = [];
+                for(let i=0; i<5; i++) {
+                    variantPromises.push(
+                        generateStoryThumbnail(
+                            storyStructure.title, ep.episodeNumber, ep.title, ep.summary, 
+                            "Cinematic Single", // Force simple layout for variants
+                            MARKET_CONFIG[targetMarket].lang, 
+                            "9:16", // Force Vertical
+                            thumbHookText + ` Variation ${i+1}`, 
+                            styleDesc + " Vertical composition for Shorts.", 
+                            refImageB64
+                        ).then(b => `data:image/png;base64,${b}`)
+                    );
                 }
+                variants = await Promise.all(variantPromises);
+                addToast("Thành công", "Đã tạo thêm 5 biến thể dọc!", "success");
             }
-
-            // --- PHYSICAL CONSISTENCY CONSTRAINT ---
-            const physicsConstraint = `
-                [IMPORTANT CONSTRAINT: PHYSICAL CONSISTENCY]
-                1. Maintain absolute character height, weight, and body proportions relative to the environment.
-                2. Objects must strictly adhere to real-world physics scaling (e.g., a table must be waist-height, not tiny).
-                3. Do not morph, shrink, or grow the character between scenes.
-                4. Keep facial features identical to the reference.
-                5. Aspect Ratio Target: ${aspectRatio}.
-            `;
-
-            // Append context to visual prompt text for AI to understand logic
-            const finalFullPrompt = `${visualPrompt}. ${contextContext}. ${physicsConstraint}`;
-
-            // Pass to API
-            const b64 = await generateVeoSceneImage(
-                finalFullPrompt, 
-                charB64, 
-                null, 
-                aspectRatio, 
-                'Story Scene', 
-                index, 
-                prevImageB64, 
-                quality
-            );
-            const fullImg = `data:image/png;base64,${b64}`;
-            
-            const updatedScenes = [...scenesRef.current];
-            updatedScenes[index] = { ...updatedScenes[index], generatedImage: fullImg, visualPrompt: visualPrompt, isGeneratingImage: false };
-            scenesRef.current = updatedScenes;
-            setScenes(updatedScenes);
-            triggerDownload(fullImg, `Ep${String(currentEpisodeIndex+1).padStart(3, '0')}-S${String(index+1).padStart(3, '0')}-Regen.png`); 
-            if (currentUser) incrementUsage(currentUser.username, ModuleType.STORY_CREATOR);
-            
-            if (storyStructure && storyId) {
-                const updatedStructure = { ...storyStructure, episodes: storyStructure.episodes.map((ep: any, idx: number) => idx === currentEpisodeIndex ? { ...ep, scenes: updatedScenes } : ep) };
-                setStoryStructure(updatedStructure);
+            const updatedStructure = { ...storyStructure }; 
+            updatedStructure.episodes[currentEpisodeIndex].thumbnail = fullImg;
+            updatedStructure.episodes[currentEpisodeIndex].thumbnailVariants = variants; 
+            setStoryStructure(updatedStructure); 
+            if (storyId) { 
                 await saveItem({ 
                     id: storyId, 
                     type: 'story', 
                     prompt: `Story: ${updatedStructure.title}`, 
                     createdAt: Date.now(), 
                     textContent: JSON.stringify(updatedStructure), 
-                    meta: { 
-                        episodeIndex: currentEpisodeIndex, 
-                        voiceMap, 
-                        aspectRatio, 
-                        textMode, 
-                        isSilentMode, 
-                        visualStyleId: visualStyle.id, 
-                        quality, 
-                        sourceModule: ModuleType.STORY_CREATOR, 
-                        targetMarket, 
-                        durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook,
-                        selectedCameraIds: Array.from(selectedCameraIds),
-                        genreId: selectedGenre.id,
-                        mood: selectedMood,
-                        ideaContext: ideaContext
-                    } 
+                    meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } 
                 }); 
-            }
-        } catch (e) {
-            addToast("Lỗi", `Không thể vẽ cảnh ${index + 1}`, "error");
-            const failedScenes = [...scenesRef.current];
-            failedScenes[index].isGeneratingImage = false;
-            setScenes(failedScenes);
-        } finally { setGlobalProcessing?.(false); }
+            } 
+            triggerDownload(fullImg, `Thumbnail-Ep${String(ep.episodeNumber).padStart(3, '0')}.png`); 
+            if (currentUser) incrementUsage(currentUser.username, ModuleType.THUMBNAIL); 
+            addToast("Thành công", "Đã tạo Thumbnail!", "success"); 
+        } catch (e: any) { addToast("Lỗi", "Thất bại.", "error"); } finally { setGlobalProcessing?.(false); } 
     };
-
-    const processSequentialGeneration = async (startIndex: number, currentScenes: VideoScene[], structure: StoryStructure) => {
-        let previousGeneratedImageB64: string | null = null;
-        let retryCount = 0;
-        const locationAnchors: Record<string, string> = {}; // Store first image of each location to maintain consistency
-        const totalScenes = scenesRef.current.length; 
-        
-        setIsGeneratingScenes(true); // Ensure global generation state
-
-        for (let i = startIndex; i < totalScenes; i++) {
-            if (isPausedRef.current) { setCurrentProcessingIndex(i); setIsProcessingPaused(true); break; }
-            
-            const latestScene = scenesRef.current[i];
-            
-            // Skip already generated, but update context for next
-            if (latestScene.generatedImage) {
-                previousGeneratedImageB64 = latestScene.generatedImage.split(',')[1];
-                if (latestScene.locationTag && !locationAnchors[latestScene.locationTag]) { locationAnchors[latestScene.locationTag] = previousGeneratedImageB64; }
-                continue;
-            }
-            
-            // Mark current as generating
-            const uiScenes = [...scenesRef.current];
-            uiScenes[i].isGeneratingImage = true;
-            setScenes(uiScenes); 
-            setCurrentProcessingIndex(i);
-            
-            try {
-                let visualPrompt = latestScene.visualPrompt.replace(/[\r\n]+/g, ' ').trim();
-                const charNameInScript = latestScene.character;
-                const locationTag = latestScene.locationTag;
-                
-                // --- CONTEXT & BACKGROUND LOGIC ---
-                let refImageForGeneration = previousGeneratedImageB64;
-                let narrativeContext = "";
-
-                // Strategy 1: Use specific location anchor if available
-                if (locationTag && locationAnchors[locationTag]) { 
-                    refImageForGeneration = locationAnchors[locationTag]; 
-                    narrativeContext += ` [LOCATION CONSISTENCY]: Return to the exact same location '${locationTag}' as seen in the reference image.`;
-                } else if (previousGeneratedImageB64) {
-                    // Strategy 2: Use direct previous image for continuity
-                    refImageForGeneration = previousGeneratedImageB64;
-                    // Look back at previous scene details
-                    if (i > 0) {
-                        const prevScene = scenesRef.current[i-1];
-                        narrativeContext += ` [CONTINUITY]: This scene follows immediately after the previous one. Previous action was: "${prevScene.visualPrompt}". Maintain consistent lighting, art style, and background environment.`;
-                        if (locationTag && prevScene.locationTag === locationTag) {
-                             narrativeContext += ` Keep strictly in the same '${locationTag}' setting.`;
-                        }
-                    }
-                } else {
-                    refImageForGeneration = null; // Start fresh if no history
-                }
-                
-                // --- CHARACTER LOGIC ---
-                let matchedCharacterItem = findStrictMatchCharacter(charNameInScript || "", selectedCharIds, availableChars);
-                if (!matchedCharacterItem && selectedCharIds.size > 0) {
-                     // Attempt fuzzy match
-                     const foundId = Array.from(selectedCharIds).find(id => { const c = availableChars.find(char => char.id === id); return c && visualPrompt.toLowerCase().includes(c.prompt.toLowerCase()); });
-                     if (foundId) matchedCharacterItem = availableChars.find(c => c.id === foundId) || null;
-                     // Fallback to first cast member if user selected casting but script name doesn't match
-                     if (!matchedCharacterItem) { const firstId = Array.from(selectedCharIds)[0]; matchedCharacterItem = availableChars.find(c => c.id === firstId) || null; }
-                }
-                
-                const charB64 = matchedCharacterItem?.base64Data ? matchedCharacterItem.base64Data.split(',')[1] : null;
-                if (matchedCharacterItem) { 
-                    visualPrompt = `[Character Reference: ${matchedCharacterItem.prompt}]. Maintain strict facial features and outfit from reference. ${visualPrompt}`; 
-                }
-                
-                // --- PHYSICAL CONSISTENCY CONSTRAINT ---
-                const physicsConstraint = `
-                    [IMPORTANT CONSTRAINT: PHYSICAL CONSISTENCY]
-                    1. Maintain absolute character height, weight, and body proportions relative to the environment.
-                    2. Objects must strictly adhere to real-world physics scaling (e.g., a table must be waist-height, not tiny).
-                    3. Do not morph, shrink, or grow the character between scenes.
-                    4. Keep facial features identical to the reference.
-                    5. Aspect Ratio Target: ${aspectRatio}.
-                `;
-
-                // Combine prompt
-                const finalFullPrompt = `${visualPrompt}. ${narrativeContext}. ${physicsConstraint}`;
-
-                const b64 = await generateVeoSceneImage(
-                    finalFullPrompt, 
-                    charB64, 
-                    null, 
-                    aspectRatio, 
-                    'Story Scene', 
-                    i, 
-                    refImageForGeneration, 
-                    quality
-                );
-                const fullImg = `data:image/png;base64,${b64}`;
-                
-                const updatedScenes = [...scenesRef.current];
-                updatedScenes[i] = { ...updatedScenes[i], visualPrompt: visualPrompt, generatedImage: fullImg, isGeneratingImage: false };
-                scenesRef.current = updatedScenes;
-                setScenes(updatedScenes); 
-                
-                previousGeneratedImageB64 = b64;
-                // Save anchor if new location
-                if (locationTag && !locationAnchors[locationTag]) { locationAnchors[locationTag] = b64; }
-                
-                retryCount = 0; 
-                triggerDownload(fullImg, `Ep${String(currentEpisodeIndex+1).padStart(3, '0')}-S${String(i+1).padStart(3, '0')}.png`); 
-                
-                const newStruct = { ...structure, episodes: structure.episodes.map((ep, idx) => idx === currentEpisodeIndex ? { ...ep, scenes: updatedScenes } : ep) };
-                setStoryStructure(newStruct);
-                
-                if (storyId) { await saveItem({ 
-                    id: storyId, 
-                    type: 'story', 
-                    prompt: `Story: ${newStruct.title}`, 
-                    createdAt: Date.now(), 
-                    textContent: JSON.stringify(newStruct), 
-                    meta: { 
-                        episodeIndex: currentEpisodeIndex, 
-                        voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds),
-                        genreId: selectedGenre.id,
-                        mood: selectedMood,
-                        ideaContext: ideaContext
-                    } 
-                }); }
-            
-            } catch (e: any) {
-                if (isPausedRef.current) { const pausedScenes = [...scenesRef.current]; pausedScenes[i].isGeneratingImage = false; setScenes(pausedScenes); return; }
-                retryCount++;
-                if (retryCount > 3) {
-                    addToast("Bỏ qua", `Cảnh ${i+1} lỗi.`, "error");
-                    const skipScenes = [...scenesRef.current]; skipScenes[i].isGeneratingImage = false; scenesRef.current = skipScenes; setScenes(skipScenes); retryCount = 0; continue; 
-                }
-                addToast("Thử lại", `Cảnh ${i+1} (Lần ${retryCount}/3)...`, "warning");
-                await new Promise(r => setTimeout(r, 4000)); i--; continue; 
-            }
-        }
-        if (!isPausedRef.current && previousGeneratedImageB64) { setIsGeneratingEnding(true); await handleGenerateEnding(previousGeneratedImageB64); }
-        if (!isPausedRef.current) { setIsGeneratingScenes(false); setGlobalProcessing?.(false); addToast("Hoàn tất", "Xong tập phim!", "success"); }
-    };
-
-    const handleResumeSequence = (startIndex: number) => {
-        if (isGlobalProcessing && !isGeneratingScenes) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; }
-        if (!storyStructure) return;
-        
-        isPausedRef.current = false;
-        setIsProcessingPaused(false);
-        setGlobalProcessing?.(true);
-        addToast("Resume Auto-Film", `Tiếp tục tự động quay từ cảnh ${startIndex + 1}...`, "info");
-        
-        processSequentialGeneration(startIndex, scenes, storyStructure);
-    }
-
-    const handleGenerateSEO = async () => { if (!storyStructure) return; if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } setGlobalProcessing?.(true); try { const ep = storyStructure.episodes[currentEpisodeIndex]; const res = await generateYouTubeSEO(ep.title, ep.summary, MARKET_CONFIG[targetMarket].lang, MARKET_CONFIG[targetMarket].label); setSeoData(res); const updatedStructure = { ...storyStructure }; updatedStructure.episodes[currentEpisodeIndex].seoData = res; setStoryStructure(updatedStructure); if (storyId) { await saveItem({ id: storyId, type: 'story', prompt: `Story: ${updatedStructure.title}`, createdAt: Date.now(), textContent: JSON.stringify(updatedStructure), meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } }); } } catch (e) { addToast("Lỗi SEO", "Thất bại.", "error"); } finally { setGlobalProcessing?.(false); } };
-    const handleGenerateEnding = async (prevImageRef?: string) => { if (isGlobalProcessing && !isGeneratingEnding) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } if (currentUser) { const check = checkUsageLimit(currentUser.username, ModuleType.STORY_CREATOR); if (!check.allowed) { addToast("Hết điểm", check.message, "error"); return; } } setIsGeneratingEnding(true); setGlobalProcessing?.(true); try { let matchedCharacterItem = null; if (selectedCharIds.size > 0) { const firstId = Array.from(selectedCharIds)[0]; matchedCharacterItem = availableChars.find(c => c.id === firstId) || null; } let endingPrompt = `YouTube Outro Screen: A large, glossy Red 'SUBSCRIBE' button and a Golden 'Notification Bell' icon in the center. High-quality 3D render, 8k resolution. Background: Cinematic atmosphere matching ${visualStyle.prompt}`; if (matchedCharacterItem) { endingPrompt = `[Character Reference: ${matchedCharacterItem.prompt}]. The character stands next to a large 'SUBSCRIBE' button and a 'Bell' icon. ${endingPrompt}. Maintain facial features.`; } const charB64 = matchedCharacterItem?.base64Data ? matchedCharacterItem.base64Data.split(',')[1] : null; let refImage = prevImageRef; if (!refImage && scenes.length > 0) { const lastScene = scenes[scenes.length - 1]; if (lastScene.generatedImage) refImage = lastScene.generatedImage.split(',')[1]; } const b64 = await generateVeoSceneImage(endingPrompt, charB64, null, aspectRatio, 'Ending Scene', 999, refImage || null, quality); const fullImg = `data:image/png;base64,${b64}`; const updatedStructure = { ...storyStructure }; updatedStructure.episodes = [...updatedStructure.episodes]; updatedStructure.episodes[currentEpisodeIndex] = { ...updatedStructure.episodes[currentEpisodeIndex], endingImage: fullImg }; setStoryStructure(updatedStructure); if (storyId) { await saveItem({ id: storyId, type: 'story', prompt: `Story: ${updatedStructure.title}`, createdAt: Date.now(), textContent: JSON.stringify(updatedStructure), meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } }); } triggerDownload(fullImg, `Ep${String(currentEpisodeIndex+1).padStart(3, '0')}-Ending.png`); if (currentUser) incrementUsage(currentUser.username, ModuleType.STORY_CREATOR); addToast("Thành công", "Đã tạo cảnh kết thúc!", "success"); } catch (e) { addToast("Lỗi", "Thất bại.", "error"); } finally { setIsGeneratingEnding(false); setGlobalProcessing?.(false); } };
-    const handleResumeGeneration = () => { if (storyStructure && scenes.length > 0) { setIsProcessingPaused(false); const nextIndex = scenes.findIndex(s => !s.generatedImage); if (nextIndex !== -1) { processSequentialGeneration(nextIndex, scenes, storyStructure); } else { addToast("Thông báo", "Đã xong toàn bộ.", "info"); } } };
-    const handleAutoFilm = async () => { if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } if (!storyStructure || scenes.length === 0) return; isPausedRef.current = false; setIsProcessingPaused(false); const startIndex = scenes.findIndex(s => !s.generatedImage); if (startIndex === -1) { const ep = storyStructure.episodes[currentEpisodeIndex] as any; if (!ep.endingImage) { handleGenerateEnding(); return; } addToast("Hoàn tất", "Xong toàn bộ.", "success"); return; } const count = scenes.length - startIndex; if (currentUser) { const check = checkUsageLimit(currentUser.username, ModuleType.STORY_CREATOR, count); if (!check.allowed) { addToast("Hết điểm", check.message, "error"); return; } } processSequentialGeneration(startIndex, scenes, storyStructure); };
-    const copyScriptToClipboard = () => { const text = scenes.map((s, i) => { const cleanVisual = s.visualPrompt.replace(/[\r\n]+/g, ' ').trim(); const cleanDialogue = s.voiceover ? s.voiceover.replace(/[\r\n]+/g, ' ').trim() : "..."; const charName = s.character || "Narrator"; const voiceInfo = voiceMap[charName] || "Default Voice"; return `Scene ${i+1}: Visual: ${cleanVisual}. Audio: (${charName}): "${cleanDialogue}"`; }).join('\n'); navigator.clipboard.writeText(text); addToast("Copy", "Đã copy vào clipboard.", "success"); };
-    const handleManualSave = async () => { if (storyId && storyStructure) { await saveItem({ id: storyId, type: 'story', prompt: `Story: ${storyStructure.title}`, createdAt: Date.now(), textContent: JSON.stringify(storyStructure), meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } }); addToast("Đã lưu", "Tiến độ đã lưu.", "success"); } };
-    const handleGenerateEpisodeThumbnail = async () => { if (isGlobalProcessing) { addToast("Hệ thống bận", "Vui lòng chờ.", "warning"); return; } if (currentUser) { const check = checkUsageLimit(currentUser.username, ModuleType.THUMBNAIL); if (!check.allowed) { addToast("Hết điểm", check.message, "error"); return; } } setGlobalProcessing?.(true); try { const ep = storyStructure.episodes[currentEpisodeIndex]; let refImageB64 = undefined; if (thumbRefSceneIndex >= 0 && scenes[thumbRefSceneIndex]?.generatedImage) { refImageB64 = scenes[thumbRefSceneIndex].generatedImage!.split(',')[1]; } else if (thumbRefSceneIndex === -1 && selectedCharIds.size > 0) { const charId = Array.from(selectedCharIds)[0]; const char = availableChars.find(c => c.id === charId); if (char?.base64Data) refImageB64 = char.base64Data.split(',')[1]; } const styleDesc = `Style: ${thumbStyle}. Emotion: ${thumbEmotion}.`; const b64 = await generateStoryThumbnail(storyStructure.title, ep.episodeNumber, ep.title, ep.summary, thumbLayout, MARKET_CONFIG[targetMarket].lang, aspectRatio, thumbHookText, styleDesc, refImageB64); const fullImg = `data:image/png;base64,${b64}`; const updatedStructure = { ...storyStructure }; updatedStructure.episodes[currentEpisodeIndex].thumbnail = fullImg; setStoryStructure(updatedStructure); if (storyId) { await saveItem({ id: storyId, type: 'story', prompt: `Story: ${updatedStructure.title}`, createdAt: Date.now(), textContent: JSON.stringify(updatedStructure), meta: { episodeIndex: currentEpisodeIndex, voiceMap, aspectRatio, textMode, isSilentMode, visualStyleId: visualStyle.id, quality, sourceModule: ModuleType.STORY_CREATOR, targetMarket, durationValue, durationUnit, retentionStrategy, narrativeFramework, ctaStrategy, openingHook, selectedCameraIds: Array.from(selectedCameraIds), genreId: selectedGenre.id, mood: selectedMood, ideaContext: ideaContext } }); } triggerDownload(fullImg, `Thumbnail-Ep${String(ep.episodeNumber).padStart(3, '0')}.png`); if (currentUser) incrementUsage(currentUser.username, ModuleType.THUMBNAIL); addToast("Thành công", "Đã tạo Thumbnail!", "success"); } catch (e: any) { addToast("Lỗi", "Thất bại.", "error"); } finally { setGlobalProcessing?.(false); } };
     const handleUpdateSceneText = (index: number, field: keyof VideoScene, value: string) => { const updatedScenes = [...scenes]; updatedScenes[index] = { ...updatedScenes[index], [field]: value }; setScenes(updatedScenes); scenesRef.current = updatedScenes; };
     const renderSEOCard = (title: string, content: string | string[], icon: React.ReactNode, textColor: string) => ( <div className="bg-zinc-950/50 p-3 rounded-xl border border-white/10 relative group hover:border-emerald-500/30 transition-colors"> <div className="flex justify-between mb-1"> <span className={`text-[10px] font-bold uppercase flex items-center gap-1 ${textColor}`}>{icon} {title}</span> <button onClick={() => { const text = Array.isArray(content) ? content.join(' ') : content; navigator.clipboard.writeText(text); addToast("Copy", "Đã sao chép", "info"); }} className="text-zinc-500 hover:text-white"><Copy size={10}/></button> </div> {Array.isArray(content) ? ( <div className="flex flex-wrap gap-1">{content.map((tag, i) => (<span key={i} className="text-[10px] bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-700">{tag}</span>))}</div> ) : ( <p className="text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed">{content}</p> )} </div> );
 
@@ -991,6 +704,7 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
                     </div>
                 </div>
 
+                {/* ... (Steps 1, 2, 3) ... */}
                 {step !== 4 && (
                     <div className="space-y-5 animate-in fade-in">
                         {step === 1 && (
@@ -1199,7 +913,7 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
                                             <button onClick={() => setShowEpisodeReview(true)} className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-white px-2 py-1 rounded flex items-center gap-1 border border-zinc-700"><List size={12}/> Danh sách tập</button>
                                         </div>
                                         <select value={currentEpisodeIndex} onChange={e => setCurrentEpisodeIndex(parseInt(e.target.value))} className="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-sm text-white">
-                                            {storyStructure.episodes.map((ep: any, idx: number) => <option key={idx} value={idx}>Tập {ep.episodeNumber}: {ep.title}</option>)}
+                                            {storyStructure.episodes.map((ep: any, idx: number) => <option key={idx} value={idx}>{storyStructure.episodes.length > 1 ? `Tập ${ep.episodeNumber}: ` : ''}{ep.title}</option>)}
                                         </select>
                                     </div>
                                 </div>
@@ -1230,7 +944,7 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
                                     </div>
                                 )}
                                 {isProcessingPaused ? (
-                                    <button onClick={handleResumeSequence} className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg animate-pulse"><Play size={18}/> Tiếp tục (Resume)</button>
+                                    <button onClick={() => handleResumeSequence(currentProcessingIndex)} className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg animate-pulse"><Play size={18}/> TIẾP TỤC TẠO TỰ ĐỘNG (Resume Auto-Film)</button>
                                 ) : (
                                     <button onClick={handleGenerateScenes} disabled={isGeneratingScenes || (isGlobalProcessing && !isGeneratingScenes)} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
                                         {isGeneratingScenes ? "Đang sản xuất..." : (isGlobalProcessing && !isGeneratingScenes) ? "Hệ thống đang bận..." : <><Clapperboard size={18}/> Sản Xuất Tập Phim</>}
@@ -1251,7 +965,7 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
                     <div className="flex flex-col h-full">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 pb-4 border-b border-white/5 gap-3">
                             <div>
-                                <h3 className="text-xl font-bold text-white">Tập {storyStructure?.episodes[currentEpisodeIndex]?.episodeNumber}: {storyStructure?.episodes[currentEpisodeIndex]?.title}</h3>
+                                <h3 className="text-xl font-bold text-white">{storyStructure?.episodes.length > 1 ? `Tập ${storyStructure?.episodes[currentEpisodeIndex]?.episodeNumber}: ` : ''}{storyStructure?.episodes[currentEpisodeIndex]?.title}</h3>
                                 <div className="flex items-center gap-2 mt-1">
                                     <p className="text-xs text-zinc-500">Style: <span className="text-indigo-400">{visualStyle.label}</span></p>
                                     <div className="h-3 w-px bg-zinc-800"></div>
@@ -1267,7 +981,11 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
                                 <button onClick={() => setShowThumbConfig(!showThumbConfig)} className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg transition-all ${showThumbConfig ? 'bg-zinc-800 border-red-500 text-white border' : 'bg-red-600 hover:bg-red-500 text-white'}`} title="Mở cấu hình Thumbnail Viral">
                                     <MonitorPlay size={14}/> Thumbnail Studio
                                 </button>
-                                <button onClick={handleAutoFilm} disabled={isGlobalProcessing || isGeneratingScenes} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg transition-all" title="Tự động tạo ảnh"><VideoIcon size={14}/> Quay toàn bộ (Auto-Film)</button>
+                                {isProcessingPaused ? (
+                                    <button onClick={() => handleResumeSequence(currentProcessingIndex)} className="px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg transition-all animate-pulse"><Play size={14}/> TIẾP TỤC TẠO TỰ ĐỘNG</button>
+                                ) : (
+                                    <button onClick={handleAutoFilm} disabled={isGlobalProcessing || isGeneratingScenes} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg transition-all" title="Tự động tạo ảnh"><VideoIcon size={14}/> Quay toàn bộ (Auto-Film)</button>
+                                )}
                                 <button onClick={() => handleGenerateEnding()} disabled={isGlobalProcessing} className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg transition-all" title="Tạo ảnh kết thúc"><Flag size={14}/> Ending Shot</button>
                                 <button onClick={copyScriptToClipboard} className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 border border-white/5"><Copy size={14}/> Copy Script</button>
                                 <button onClick={handleManualSave} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg"><Save size={14}/> Lưu</button>
@@ -1297,28 +1015,53 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
                                             <CheckCircle2 size={14} className="text-green-500"/>
                                             <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider">Kết quả Thumbnail</span>
                                         </div>
-                                        <div className="relative w-full max-w-sm aspect-video rounded-xl overflow-hidden border border-zinc-700 shadow-xl group bg-black/50">
-                                            <img 
-                                                src={(storyStructure.episodes[currentEpisodeIndex] as any).thumbnail} 
-                                                className="w-full h-full object-cover" 
-                                                onClick={() => setPreviewImage((storyStructure.episodes[currentEpisodeIndex] as any).thumbnail)}
-                                            />
-                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
-                                                <button 
-                                                    onClick={() => triggerDownload((storyStructure.episodes[currentEpisodeIndex] as any).thumbnail, `Thumbnail-Ep${String((storyStructure.episodes[currentEpisodeIndex] as any).episodeNumber).padStart(3, '0')}.png`)} 
-                                                    className="p-2 bg-white text-black rounded-full hover:bg-zinc-200 transition-transform hover:scale-110 shadow-lg"
-                                                    title="Tải xuống"
-                                                >
-                                                    <Download size={18}/>
-                                                </button>
-                                                <button 
-                                                    onClick={() => setPreviewImage((storyStructure.episodes[currentEpisodeIndex] as any).thumbnail)} 
-                                                    className="p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-500 transition-transform hover:scale-110 shadow-lg"
-                                                    title="Xem chi tiết"
-                                                >
-                                                    <Maximize2 size={18}/>
-                                                </button>
+                                        <div className="flex flex-col gap-3">
+                                            {/* Main Thumbnail */}
+                                            <div className="relative w-full max-w-sm aspect-video rounded-xl overflow-hidden border border-zinc-700 shadow-xl group bg-black/50">
+                                                <img 
+                                                    src={(storyStructure.episodes[currentEpisodeIndex] as any).thumbnail} 
+                                                    className="w-full h-full object-cover" 
+                                                    onClick={() => setPreviewImage((storyStructure.episodes[currentEpisodeIndex] as any).thumbnail)}
+                                                />
+                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
+                                                    <button 
+                                                        onClick={() => triggerDownload((storyStructure.episodes[currentEpisodeIndex] as any).thumbnail, `Thumbnail-Ep${String((storyStructure.episodes[currentEpisodeIndex] as any).episodeNumber).padStart(3, '0')}.png`)} 
+                                                        className="p-2 bg-white text-black rounded-full hover:bg-zinc-200 transition-transform hover:scale-110 shadow-lg"
+                                                        title="Tải xuống"
+                                                    >
+                                                        <Download size={18}/>
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setPreviewImage((storyStructure.episodes[currentEpisodeIndex] as any).thumbnail)} 
+                                                        className="p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-500 transition-transform hover:scale-110 shadow-lg"
+                                                        title="Xem chi tiết"
+                                                    >
+                                                        <Maximize2 size={18}/>
+                                                    </button>
+                                                </div>
                                             </div>
+
+                                            {/* Vertical Variants (9:16) */}
+                                            {(storyStructure.episodes[currentEpisodeIndex] as any).thumbnailVariants && (storyStructure.episodes[currentEpisodeIndex] as any).thumbnailVariants.length > 0 && (
+                                                <div className="mt-2">
+                                                    <div className="text-[10px] font-bold text-zinc-400 mb-2 uppercase tracking-wider">Biến thể dọc (Shorts/TikTok)</div>
+                                                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                                                        {(storyStructure.episodes[currentEpisodeIndex] as any).thumbnailVariants.map((variant: string, vIdx: number) => (
+                                                            <div key={vIdx} className="relative min-w-[80px] w-24 aspect-[9/16] rounded-lg overflow-hidden border border-zinc-700 shadow-md group cursor-pointer" onClick={() => setPreviewImage(variant)}>
+                                                                <img src={variant} className="w-full h-full object-cover"/>
+                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); triggerDownload(variant, `Thumb-Var-${vIdx+1}.png`) }} 
+                                                                        className="p-1.5 bg-white text-black rounded-full hover:bg-zinc-200 shadow-lg"
+                                                                    >
+                                                                        <Download size={12}/>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -1395,100 +1138,58 @@ const StoryCreator: React.FC<StoryCreatorProps> = ({ addToast, initialStoryId, c
                                     </div>
                                     <div className="flex-1 space-y-3">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <span className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-1"><MapPin size={10}/> Bối cảnh (Location Tag)</span>
-                                            <input value={scene.locationTag || ''} onChange={(e) => handleUpdateSceneText(idx, 'locationTag', e.target.value)} className="bg-zinc-950 border border-zinc-800 text-[10px] text-white px-2 py-1 rounded w-32 focus:border-blue-500 outline-none" placeholder="VD: BEDROOM"/>
+                                            <span className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-1"><VideoIcon size={10}/> Visual Prompt</span>
                                         </div>
+                                        <div className="relative group">
+                                            <textarea 
+                                                value={scene.visualPrompt} 
+                                                onChange={(e) => handleUpdateSceneText(idx, 'visualPrompt', e.target.value)} 
+                                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-300 focus:text-white focus:border-emerald-500 outline-none h-24 resize-none font-mono leading-relaxed"
+                                            />
+                                            <button 
+                                                onClick={() => { navigator.clipboard.writeText(scene.visualPrompt); addToast("Copy", "Đã sao chép prompt", "info"); }}
+                                                className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/80 rounded text-zinc-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <Copy size={12}/>
+                                            </button>
+                                        </div>
+                                        
                                         <div>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-[10px] font-bold text-blue-400 uppercase flex items-center gap-1"><VideoIcon size={10}/> Visual Prompt (English)</span>
-                                                {autoEnhance && !scene.generatedImage && <span className="text-[9px] text-indigo-400 flex items-center gap-1 font-bold"><Sparkles size={8}/> Enhanced Transitions</span>}
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                                <span className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-1"><Mic size={10}/> Dialogue ({scene.character || 'Narrator'})</span>
                                             </div>
-                                            <textarea value={scene.visualPrompt} onChange={(e) => handleUpdateSceneText(idx, 'visualPrompt', e.target.value)} className="w-full bg-black/20 border border-white/5 rounded p-2 text-sm text-zinc-300 font-light leading-relaxed focus:border-blue-500 focus:outline-none resize-none h-20"/>
+                                            <textarea 
+                                                value={scene.voiceover || scene.dialogue || ""} 
+                                                onChange={(e) => handleUpdateSceneText(idx, 'voiceover', e.target.value)} 
+                                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-white focus:border-indigo-500 outline-none h-16 resize-none italic"
+                                            />
                                         </div>
-                                        {!isSilentMode && (
-                                            <div>
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <span className="text-xs font-bold text-green-400 uppercase flex items-center gap-1"><Mic size={10}/> Audio / Dialogue</span>
-                                                    <span className="text-[10px] text-zinc-500">{scene.character || "Narrator"} • {voiceMap[scene.character || ""] || "Default"}</span>
-                                                </div>
-                                                <textarea value={scene.voiceover} onChange={(e) => handleUpdateSceneText(idx, 'voiceover', e.target.value)} className="w-full bg-emerald-900/5 border border-emerald-500/10 rounded p-2 text-sm text-white italic focus:border-emerald-500 focus:outline-none resize-none h-16"/>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             ))}
-                            
-                            <div className="pt-6 border-t border-white/5">
-                                <div className={`bg-black/30 border rounded-2xl p-4 flex flex-col md:flex-row gap-4 transition-all hover:border-white/20 relative group ${isGeneratingEnding ? 'border-indigo-500/50 bg-indigo-900/10' : 'border-white/10'}`}>
-                                    <div className="w-full md:w-1/3 shrink-0">
-                                        <div className={`bg-black rounded-xl overflow-hidden border border-zinc-800 relative group flex items-center justify-center ${aspectRatio === '9:16' ? 'aspect-[9/16]' : 'aspect-video'}`}>
-                                            {(storyStructure?.episodes[currentEpisodeIndex] as any)?.endingImage ? (
-                                                <>
-                                                    <img src={(storyStructure.episodes[currentEpisodeIndex] as any).endingImage} className="w-full h-full object-cover cursor-pointer" onClick={() => setPreviewImage((storyStructure.episodes[currentEpisodeIndex] as any).endingImage)} />
-                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); triggerDownload((storyStructure.episodes[currentEpisodeIndex] as any).endingImage, `Ep${currentEpisodeIndex+1}-Ending.png`) }} 
-                                                            className="p-2 bg-white text-black rounded-full hover:bg-zinc-200 transition-transform hover:scale-110 shadow-xl"
-                                                        >
-                                                            <Download size={20}/>
-                                                        </button>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <button onClick={() => handleGenerateEnding()} disabled={isGeneratingEnding || isGlobalProcessing} className="flex flex-col items-center justify-center text-zinc-500 hover:text-indigo-400 transition-colors">
-                                                    {isGeneratingEnding ? <Loader2 size={24} className="animate-spin mb-2 text-indigo-500"/> : <Flag size={24} className="mb-2"/>}
-                                                    <span className="text-xs font-bold">{isGeneratingEnding ? "Đang vẽ Ending..." : "Tạo Ending Shot"}</span>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex-1 space-y-2">
-                                        <h4 className="text-sm font-bold text-white uppercase flex items-center gap-2"><Flag size={14} className="text-indigo-500"/> Ending Shot (Subscribe & Bell)</h4>
-                                        <p className="text-xs text-zinc-400 leading-relaxed">Hình ảnh kết thúc với nút Subscribe và Chuông để mời gọi hành động.</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div ref={scrollRef}></div>
                         </div>
                     </div>
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 opacity-50">
-                        <BookOpen size={64} className="mb-4"/>
-                        <p className="text-lg font-light">Virtual Writers' Room</p>
-                        <p className="text-sm">Hoàn thành các bước bên trái để bắt đầu</p>
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 opacity-60">
+                        <Clapperboard size={64} className="mb-4 text-emerald-500/50"/>
+                        <p className="text-xl font-light">Production Studio</p>
+                        <p className="text-xs mt-2">Hoàn thành Setup (Bước 1-3) để bắt đầu sản xuất</p>
                     </div>
                 )}
             </div>
 
-            <ImageViewerModal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} imageSrc={previewImage} />
-
-            {showEpisodeReview && storyStructure && (
-                <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[85vh]">
-                        <div className="p-5 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 shrink-0">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><LayoutTemplate size={20} className="text-emerald-500"/> Danh sách tập phim</h3>
-                            <button onClick={() => setShowEpisodeReview(false)} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white"><X size={20}/></button>
-                        </div>
-                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
-                            {storyStructure.episodes.map((ep: any, idx: number) => {
-                                const isScripted = ep.scenes && ep.scenes.length > 0;
-                                const isFilmed = isScripted && ep.scenes.every((s: any) => s.generatedImage);
-                                return (
-                                    <div key={idx} className={`p-4 rounded-xl border flex flex-col gap-3 transition-colors ${currentEpisodeIndex === idx ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-zinc-950 border-zinc-800 hover:border-zinc-600'}`}>
-                                        <div className="flex justify-between items-start">
-                                            <div><h4 className="text-lg font-bold text-white mb-1">Tập {ep.episodeNumber}: {ep.title}</h4><p className="text-xs text-zinc-400 line-clamp-2">{ep.summary}</p></div>
-                                            <div className="flex flex-col items-end gap-2">
-                                                <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${isFilmed ? 'bg-green-500/20 text-green-400 border border-green-500/30' : isScripted ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-zinc-800 text-zinc-500 border border-zinc-700'}`}>{isFilmed ? 'Hoàn Thành' : isScripted ? 'Đang Sản Xuất' : 'Chưa Có Kịch Bản'}</span>
-                                                <button onClick={() => { setCurrentEpisodeIndex(idx); setShowEpisodeReview(false); if(isScripted) { setScenes(ep.scenes); scenesRef.current = ep.scenes; setStep(4); } else { setStep(3); } }} className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white text-xs rounded-lg font-bold flex items-center gap-1 transition-colors"><Edit2 size={12}/> Chọn Tập</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ImageViewerModal
+                isOpen={!!previewImage}
+                onClose={() => setPreviewImage(null)}
+                imageSrc={previewImage}
+                altText="Scene Preview"
+            >
+                {previewImage && (
+                    <button onClick={() => triggerDownload(previewImage, `Preview-${Date.now()}.png`)} className="bg-white text-black px-6 py-2 rounded-full font-bold flex items-center gap-2 shadow-lg hover:scale-105 transition-transform">
+                        <Download size={18}/> Tải ảnh gốc
+                    </button>
+                )}
+            </ImageViewerModal>
         </div>
     );
 };

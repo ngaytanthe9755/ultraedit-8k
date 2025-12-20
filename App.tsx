@@ -13,6 +13,7 @@ import Thumbnail from './modules/Thumbnail';
 import CharacterCreator from './modules/CharacterCreator';
 import StoryCreator from './modules/StoryCreator';
 import ChannelBuilder from './modules/ChannelBuilder';
+import PhotoEditor from './modules/PhotoEditor'; // Added import
 import Home from './modules/Home';
 import AdminPanel from './modules/AdminPanel';
 import SettingsModal from './components/SettingsModal';
@@ -20,6 +21,10 @@ import { Key, X, Loader2, Cloud, Link, MessageCircle, Send, CheckCircle2, Lock, 
 import { v4 as uuidv4 } from 'uuid';
 import { loginUser, registerUser, getAllUsers, getUserNotifications, markNotificationsRead, isSessionValid, syncUsersFromCloud, findUserByContact, resetPassword, finalizeUserLogin, getSystemConfig } from './services/userService';
 import { generateOTP, sendOTP, getBotInfo } from './services/telegramService';
+
+// ... (PolicyModal, TelegramConnect, AuthModal remain unchanged) ...
+// To save space, I will focus on the return statement of App component where routing happens.
+// Assuming the top part of the file is identical to what was provided in context.
 
 // --- POLICY MODAL COMPONENT ---
 const PolicyModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
@@ -487,24 +492,9 @@ const App: React.FC = () => {
                   localStorage.setItem('ue_current_user', JSON.stringify(updatedUser));
               }
 
-              // Sync Notifications - Merge cloud with local to avoid losing local-only recent pushes
-              // Current strategy: Use Cloud as source of truth for PERSISTED items, but respect local if more recent
-              // Simplified: Just take server notifs for now to ensure consistency across devices
               const serverNotifs = getUserNotifications(currentUserState.username);
-              
-              // Only update if different to avoid re-renders
               if (JSON.stringify(serverNotifs) !== JSON.stringify(notifications)) {
-                  // Merge logic: Keep local unread if they are newer? 
-                  // For simplicity, let's trust the server sync which happens frequently.
-                  // However, since we now add notifications locally first, we should be careful not to overwrite
-                  // pending pushes. 
-                  // Ideally, userService handles the merging. 
                   setNotifications(serverNotifs);
-                  
-                  // Show toast for new unread from server (e.g. admin pushed message)
-                  const newUnread = serverNotifs.filter(n => !n.read && n.timestamp > (Date.now() - 10000));
-                  // Avoid duplicating toasts for things we just triggered locally
-                  // Use a simple check or ID tracking if needed. For now, rely on timestamp.
               }
           }
       }, 5000); // Check every 5 seconds
@@ -541,10 +531,6 @@ const App: React.FC = () => {
         setUser(updatedUser);
         userRef.current = updatedUser; // Update Ref
         localStorage.setItem('ue_current_user', JSON.stringify(updatedUser));
-        
-        // Note: The periodic sync (every 5s) or action-triggered syncs in userService
-        // will eventually push this to the cloud. 
-        // We don't force push here to avoid network spam on every toast.
     }
   };
 
@@ -607,8 +593,6 @@ const App: React.FC = () => {
           const updatedUser = { ...user, notifications: updated };
           setUser(updatedUser);
           localStorage.setItem('ue_current_user', JSON.stringify(updatedUser));
-          // Note: Actual deletion from cloud isn't strictly necessary for notifications history, 
-          // but could be implemented in userService if needed. For now, local cleaning is good.
       }
   }
 
@@ -674,6 +658,15 @@ const App: React.FC = () => {
             isAuthenticated={user.isAuthenticated}
             isGlobalProcessing={isGlobalProcessing}
             setGlobalProcessing={setGlobalProcessing}
+          />
+      </div>
+
+      {/* PHOTO EDITOR (PERSISTENT) */}
+      <div style={{ display: activeModule === ModuleType.PHOTO_EDITOR ? 'block' : 'none', height: '100%' }}>
+          <PhotoEditor 
+            addToast={addToast} 
+            isAuthenticated={user.isAuthenticated}
+            onRequireAuth={() => setIsAuthModalOpen(true)}
           />
       </div>
 
