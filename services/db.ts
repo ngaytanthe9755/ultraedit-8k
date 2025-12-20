@@ -1,7 +1,8 @@
 
 import { LibraryItem, SavedCharacter } from '../types';
 import { driveService } from './googleDriveService';
-import { supabaseService } from './supabaseService'; // Import Supabase
+import { supabaseService } from './supabaseService';
+import { firebaseService } from './firebaseService'; // Import Firebase
 
 const DB_NAME = 'creative_studio_db';
 const STORE_LIBRARY = 'library_items';
@@ -20,7 +21,9 @@ const isCloudOnlyMode = (): boolean => {
 
 // Helper to check if ANY cloud service is active
 const isCloudActive = (): boolean => {
-    return (driveService.isConfigured() && driveService.isAuthenticated()) || supabaseService.isConfigured();
+    return (driveService.isConfigured() && driveService.isAuthenticated()) || 
+           supabaseService.isConfigured() ||
+           firebaseService.isConfigured();
 }
 
 export const initDB = (): Promise<IDBDatabase> => {
@@ -72,10 +75,11 @@ export const saveItem = async (item: LibraryItem, skipDriveSync: boolean = false
   if (isCloudActive() && isCloudOnlyMode() && !skipDriveSync) {
       console.log("[DB] Cloud-Only Mode: Uploading directly to Cloud, skipping Local DB.");
       try {
-          // Dual Sync if both configured
+          // Multi Sync
           const promises = [];
           if (driveService.isAuthenticated()) promises.push(driveService.uploadItem(item));
           if (supabaseService.isConfigured()) promises.push(supabaseService.uploadItem(item));
+          if (firebaseService.isConfigured()) promises.push(firebaseService.uploadItem(item));
           
           await Promise.allSettled(promises);
           notifyLibraryChange();
@@ -104,6 +108,9 @@ export const saveItem = async (item: LibraryItem, skipDriveSync: boolean = false
             if (supabaseService.isConfigured()) {
                 supabaseService.uploadItem(item).catch(err => console.warn("Background Supabase Upload failed", err));
             }
+            if (firebaseService.isConfigured()) {
+                firebaseService.uploadItem(item).catch(err => console.warn("Background Firebase Upload failed", err));
+            }
         }
         
         resolve();
@@ -125,12 +132,15 @@ export const getAllItems = async (): Promise<LibraryItem[]> => {
   if (isCloudActive() && isCloudOnlyMode()) {
       console.log("[DB] Cloud-Only Mode: Fetching list from Cloud...");
       try {
-          // Prefer Supabase if available (faster/database)
+          // Priority: Firebase (Best for files) > Supabase > Drive
+          if (firebaseService.isConfigured()) {
+              const items = await firebaseService.fetchAllItems();
+              return items.sort((a, b) => b.createdAt - a.createdAt);
+          }
           if (supabaseService.isConfigured()) {
               const items = await supabaseService.fetchAllItems();
               return items.sort((a, b) => b.createdAt - a.createdAt);
           }
-          // Fallback to Drive
           if (driveService.isAuthenticated()) {
               const items = await driveService.fetchAllItems();
               return items.sort((a, b) => b.createdAt - a.createdAt);
@@ -168,6 +178,7 @@ export const deleteItem = async (id: string): Promise<void> => {
       console.log("[DB] Cloud-Only Mode: Deleting from Cloud...");
       if (driveService.isAuthenticated()) await driveService.deleteItem(id);
       if (supabaseService.isConfigured()) await supabaseService.deleteItem(id);
+      if (firebaseService.isConfigured()) await firebaseService.deleteItem(id);
       notifyLibraryChange();
       return;
   }
@@ -186,6 +197,7 @@ export const deleteItem = async (id: string): Promise<void> => {
         // --- BACKGROUND DELETE ---
         if (driveService.isAuthenticated()) driveService.deleteItem(id).catch(console.warn);
         if (supabaseService.isConfigured()) supabaseService.deleteItem(id).catch(console.warn);
+        if (firebaseService.isConfigured()) firebaseService.deleteItem(id).catch(console.warn);
 
         resolve();
     };
@@ -200,6 +212,7 @@ export const deleteItems = async (ids: string[]): Promise<void> => {
         const promises = [];
         if (driveService.isAuthenticated()) promises.push(...ids.map(id => driveService.deleteItem(id)));
         if (supabaseService.isConfigured()) promises.push(...ids.map(id => supabaseService.deleteItem(id)));
+        if (firebaseService.isConfigured()) promises.push(...ids.map(id => firebaseService.deleteItem(id)));
         await Promise.allSettled(promises);
         notifyLibraryChange();
         return;
@@ -221,6 +234,7 @@ export const deleteItems = async (ids: string[]): Promise<void> => {
             
             if (driveService.isAuthenticated()) ids.forEach(id => driveService.deleteItem(id).catch(console.warn));
             if (supabaseService.isConfigured()) ids.forEach(id => supabaseService.deleteItem(id).catch(console.warn));
+            if (firebaseService.isConfigured()) ids.forEach(id => firebaseService.deleteItem(id).catch(console.warn));
 
             resolve();
         };

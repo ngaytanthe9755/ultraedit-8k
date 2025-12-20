@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Cloud, Download, Upload, CheckCircle, AlertCircle, HardDrive, RefreshCw, X, Cpu, Zap, Crown, UserCog, Save, Key, User as UserIcon, MessageCircle, Lock, Loader2, Database, Link, Check, ToggleLeft, ToggleRight, Server } from 'lucide-react';
+import { Cloud, Download, Upload, CheckCircle, AlertCircle, HardDrive, RefreshCw, X, Cpu, Zap, Crown, UserCog, Save, Key, User as UserIcon, MessageCircle, Lock, Loader2, Database, Link, Check, ToggleLeft, ToggleRight, Server, Flame } from 'lucide-react';
 import { exportDatabase, importDatabase, saveItem, getAllItems } from '../services/db'; 
 import { updateUserCredentials, getAllUsers } from '../services/userService';
 import { getBotInfo } from '../services/telegramService';
 import { driveService } from '../services/googleDriveService'; 
-import { supabaseService } from '../services/supabaseService'; // Import Supabase Service
+import { supabaseService } from '../services/supabaseService';
+import { firebaseService } from '../services/firebaseService'; // Import Firebase Service
 import { User } from '../types';
 
 interface SettingsModalProps {
@@ -38,6 +39,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
     const [isSupaConnected, setIsSupaConnected] = useState(false);
     const [supaLoading, setSupaLoading] = useState(false);
 
+    // Firebase States
+    const [firebaseConfigStr, setFirebaseConfigStr] = useState('');
+    const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
+    const [firebaseLoading, setFirebaseLoading] = useState(false);
+
     const [isCloudOnly, setIsCloudOnly] = useState(false); 
 
     useEffect(() => {
@@ -69,6 +75,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                 setSupaUrl(supaConfig.url);
                 setSupaKey(supaConfig.key);
                 if (supabaseService.isConfigured()) setIsSupaConnected(true);
+            }
+
+            // Load Firebase Config
+            const fbConfig = firebaseService.getConfig();
+            if (fbConfig) {
+                setFirebaseConfigStr(JSON.stringify(fbConfig, null, 2));
+                if (firebaseService.isConfigured()) setIsFirebaseConnected(true);
             }
         }
     }, [isOpen, user]);
@@ -113,6 +126,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
         }
     }
 
+    // --- FIREBASE HANDLERS ---
+    const handleConnectFirebase = async () => {
+        if (!firebaseConfigStr) { addToast("Thiếu thông tin", "Dán Config JSON vào.", "error"); return; }
+        setFirebaseLoading(true);
+        try {
+            const success = firebaseService.saveConfig(firebaseConfigStr);
+            if (!success) throw new Error("JSON Config không hợp lệ.");
+            
+            const ok = await firebaseService.testConnection();
+            if (ok) {
+                setIsFirebaseConnected(true);
+                addToast("Kết nối thành công", "Đã liên kết Firebase (Storage + Firestore).", "success");
+            } else {
+                throw new Error("Không thể kết nối. Kiểm tra Permission Rules.");
+            }
+        } catch (e: any) {
+            addToast("Lỗi", e.message, "error");
+            setIsFirebaseConnected(false);
+        } finally {
+            setFirebaseLoading(false);
+        }
+    }
+
     const handleToggleCloudOnly = () => {
         const newValue = !isCloudOnly;
         setIsCloudOnly(newValue);
@@ -123,10 +159,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
 
     const handleDisconnectDrive = () => { driveService.clearConfig(); setIsDriveConnected(false); addToast('Đã ngắt kết nối', 'Drive Disconnected.', 'info'); }
     const handleDisconnectSupabase = () => { supabaseService.clearConfig(); setIsSupaConnected(false); addToast('Đã ngắt kết nối', 'Supabase Disconnected.', 'info'); }
+    const handleDisconnectFirebase = () => { firebaseService.clearConfig(); setIsFirebaseConnected(false); addToast('Đã ngắt kết nối', 'Firebase Disconnected.', 'info'); }
 
     // --- GENERIC SYNC ---
     const handleSyncUp = async () => {
-        if (!isDriveConnected && !isSupaConnected) { addToast("Chưa kết nối", "Vui lòng kết nối ít nhất 1 Cloud.", "error"); return; }
+        if (!isDriveConnected && !isSupaConnected && !isFirebaseConnected) { addToast("Chưa kết nối", "Vui lòng kết nối ít nhất 1 Cloud.", "error"); return; }
         setIsProcessing(true);
         try {
             const allItems = await getAllItems();
@@ -138,6 +175,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                 const chunk = allItems.slice(i, i + chunkSize);
                 if (isDriveConnected) promises.push(Promise.all(chunk.map(item => driveService.uploadItem(item))));
                 if (isSupaConnected) promises.push(Promise.all(chunk.map(item => supabaseService.uploadItem(item))));
+                if (isFirebaseConnected) promises.push(Promise.all(chunk.map(item => firebaseService.uploadItem(item))));
                 await Promise.all(promises); 
             }
             addToast('Hoàn tất', 'Đã đồng bộ lên tất cả Cloud đang kết nối.', 'success');
@@ -172,27 +210,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                             <div className="flex items-center gap-2"><span className="text-[10px] text-zinc-400">{isCloudOnly ? "Cloud Only" : "Hybrid Mode"}</span><button onClick={handleToggleCloudOnly} className={`transition-colors ${isCloudOnly ? 'text-green-400' : 'text-zinc-600'}`}>{isCloudOnly ? <ToggleRight size={28}/> : <ToggleLeft size={28}/>}</button></div>
                         </div>
 
-                        {/* 1. SUPABASE (Recommended) */}
+                        {/* 1. FIREBASE (Best for Files) */}
+                        <div className={`border rounded-xl p-4 transition-all ${isFirebaseConnected ? 'bg-orange-900/10 border-orange-500/30' : 'bg-zinc-950 border-zinc-800'}`}>
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="flex items-center gap-2"><Flame size={18} className={isFirebaseConnected ? "text-orange-400" : "text-zinc-500"}/><span className="font-bold text-sm text-white">Firebase (Storage + Firestore)</span>{isFirebaseConnected && <span className="text-[9px] bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded">Active</span>}</div>
+                                {isFirebaseConnected && <button onClick={handleDisconnectFirebase} className="text-[10px] text-red-400 hover:underline">Ngắt kết nối</button>}
+                            </div>
+                            {!isFirebaseConnected ? (
+                                <div className="space-y-2">
+                                    <textarea 
+                                        value={firebaseConfigStr} 
+                                        onChange={e => setFirebaseConfigStr(e.target.value)} 
+                                        placeholder={`Dán JSON Config vào đây:\n{\n  "apiKey": "...",\n  "authDomain": "...",\n  "projectId": "...",\n  "storageBucket": "..."\n}`} 
+                                        className="w-full h-24 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-[10px] font-mono text-white outline-none focus:border-orange-500 resize-none"
+                                    />
+                                    <button onClick={handleConnectFirebase} disabled={firebaseLoading} className="w-full py-2 bg-orange-700 hover:bg-orange-600 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all">{firebaseLoading ? <Loader2 size={14} className="animate-spin"/> : <Link size={14}/>} Kết Nối Firebase</button>
+                                    <p className="text-[10px] text-zinc-500 italic mt-1">Khuyên dùng: Hỗ trợ lưu File lớn (ảnh 4K/Video) và đồng bộ thời gian thực.</p>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-zinc-400">Đã kết nối Firebase. Dữ liệu hình ảnh và video được tối ưu hóa lưu trữ.</p>
+                            )}
+                        </div>
+
+                        {/* 2. SUPABASE (Database) */}
                         <div className={`border rounded-xl p-4 transition-all ${isSupaConnected ? 'bg-green-900/10 border-green-500/30' : 'bg-zinc-950 border-zinc-800'}`}>
                             <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-2"><Server size={18} className={isSupaConnected ? "text-green-400" : "text-zinc-500"}/><span className="font-bold text-sm text-white">Supabase (Database + Storage)</span>{isSupaConnected && <span className="text-[9px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded">Active</span>}</div>
+                                <div className="flex items-center gap-2"><Server size={18} className={isSupaConnected ? "text-green-400" : "text-zinc-500"}/><span className="font-bold text-sm text-white">Supabase (Database)</span>{isSupaConnected && <span className="text-[9px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded">Active</span>}</div>
                                 {isSupaConnected && <button onClick={handleDisconnectSupabase} className="text-[10px] text-red-400 hover:underline">Ngắt kết nối</button>}
                             </div>
                             {!isSupaConnected ? (
                                 <div className="space-y-2">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                        <input type="text" value={supaUrl} onChange={e => setSupaUrl(e.target.value)} placeholder="Project URL (https://...supabase.co)" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500"/>
-                                        <input type="password" value={supaKey} onChange={e => setSupaKey(e.target.value)} placeholder="Anon / Public Key" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500"/>
+                                        <input type="text" value={supaUrl} onChange={e => setSupaUrl(e.target.value)} placeholder="Project URL" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500"/>
+                                        <input type="password" value={supaKey} onChange={e => setSupaKey(e.target.value)} placeholder="Anon Key" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500"/>
                                     </div>
                                     <button onClick={handleConnectSupabase} disabled={supaLoading} className="w-full py-2 bg-green-700 hover:bg-green-600 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all">{supaLoading ? <Loader2 size={14} className="animate-spin"/> : <Link size={14}/>} Kết Nối Supabase</button>
-                                    <p className="text-[10px] text-zinc-500 italic mt-1">Khuyên dùng: Miễn phí, Nhanh, Không cần Login lại.</p>
                                 </div>
                             ) : (
-                                <p className="text-xs text-zinc-400">Đã kết nối cơ sở dữ liệu Supabase. Dữ liệu của bạn được lưu trữ an toàn.</p>
+                                <p className="text-xs text-zinc-400">Đã kết nối cơ sở dữ liệu Supabase.</p>
                             )}
                         </div>
 
-                        {/* 2. GOOGLE DRIVE (Alternative) */}
+                        {/* 3. GOOGLE DRIVE (Backup) */}
                         <div className={`border rounded-xl p-4 transition-all ${isDriveConnected ? 'bg-blue-900/10 border-blue-500/30' : 'bg-zinc-950 border-zinc-800'}`}>
                             <div className="flex justify-between items-start mb-3">
                                 <div className="flex items-center gap-2"><HardDrive size={18} className={isDriveConnected ? "text-blue-400" : "text-zinc-500"}/><span className="font-bold text-sm text-white">Google Drive</span>{isDriveConnected && <span className="text-[9px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">Active</span>}</div>
@@ -209,7 +268,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, addToast
                             ) : <p className="text-xs text-zinc-400">Đã kết nối Google Drive. Token có thể hết hạn sau 1 giờ.</p>}
                         </div>
 
-                        {(isDriveConnected || isSupaConnected) && (
+                        {(isDriveConnected || isSupaConnected || isFirebaseConnected) && (
                             <button onClick={handleSyncUp} disabled={isProcessing} className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 border border-zinc-700 transition-all shadow-lg">{isProcessing ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>} Đồng Bộ Ngay (Push to Cloud)</button>
                         )}
                     </div>

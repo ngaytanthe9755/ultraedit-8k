@@ -73,3 +73,26 @@ export const applyWatermark = (base64Image: string): Promise<string> => {
         img.src = base64Image.startsWith('data:') ? base64Image : `data:image/png;base64,${base64Image}`;
     });
 };
+
+/**
+ * Converts a Base64 string to a Blob object for efficient storage upload.
+ */
+export const base64ToBlob = (base64: string): Blob => {
+    try {
+        // Handle data URI scheme if present
+        const parts = base64.split(';base64,');
+        const contentType = parts.length > 1 ? parts[0].split(':')[1] : 'image/png';
+        const raw = window.atob(parts.length > 1 ? parts[1] : base64);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+
+        for (let i = 0; i < rawLength; ++i) {
+            uInt8Array[i] = raw.charCodeAt(i);
+        }
+
+        return new Blob([uInt8Array], { type: contentType });
+    } catch (e) {
+        console.error("Base64 conversion failed", e);
+        return new Blob([], { type: 'image/png' });
+    }
+};

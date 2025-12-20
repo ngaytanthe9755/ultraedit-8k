@@ -1,6 +1,8 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { LibraryItem } from '../types';
+import { base64ToBlob } from './imageUtils';
+import { v4 as uuidv4 } from 'uuid';
 
 interface SupabaseConfig {
     url: string;
@@ -8,6 +10,7 @@ interface SupabaseConfig {
 }
 
 const TABLE_NAME = 'library_items';
+const BUCKET_NAME = 'ultraedit-assets';
 
 class SupabaseService {
     private client: SupabaseClient | null = null;
@@ -28,7 +31,9 @@ class SupabaseService {
     private initializeClient() {
         if (this.config?.url && this.config?.key) {
             try {
-                this.client = createClient(this.config.url, this.config.key);
+                this.client = createClient(this.config.url, this.config.key, {
+                    auth: { persistSession: false } // Optimize for API key usage
+                });
             } catch (e) {
                 console.error("Supabase Init Error", e);
                 this.client = null;
@@ -57,31 +62,151 @@ class SupabaseService {
     }
 
     /**
+     * Upload Asset to Supabase Storage
+     * Returns the Public URL
+     */
+    private async uploadAssetToStorage(path: string, base64Data: string): Promise<string | null> {
+        if (!this.client) return null;
+
+        try {
+            const blob = base64ToBlob(base64Data);
+            
+            // Upload to 'ultraedit-assets' bucket
+            const { data, error } = await this.client.storage
+                .from(BUCKET_NAME)
+                .upload(path, blob, {
+                    upsert: true,
+                    contentType: 'image/png'
+                });
+
+            if (error) {
+                console.warn(`[Supabase Storage] Upload failed for ${path}`, error.message);
+                return null;
+            }
+
+            // Get Public URL
+            const { data: publicUrlData } = this.client.storage
+                .from(BUCKET_NAME)
+                .getPublicUrl(path);
+
+            return publicUrlData.publicUrl;
+        } catch (e) {
+            console.error("[Supabase Storage] Exception:", e);
+            return null;
+        }
+    }
+
+    /**
+     * Special Handler for Stories:
+     * Parses the JSON, finds all Base64 images in scenes/thumbnails,
+     * uploads them, and returns the Clean JSON string with URLs.
+     */
+    private async processStoryImages(storyId: string, jsonContent: string): Promise<string> {
+        try {
+            const structure = JSON.parse(jsonContent);
+            if (!structure.episodes) return jsonContent;
+
+            let hasChanges = false;
+            const uploadPromises: Promise<void>[] = [];
+
+            // Helper to queue upload
+            const queueUpload = (base64: string, path: string, callback: (url: string) => void) => {
+                if (base64 && base64.startsWith('data:')) {
+                    uploadPromises.push(
+                        this.uploadAssetToStorage(path, base64).then(url => {
+                            if (url) {
+                                callback(url);
+                                hasChanges = true;
+                            }
+                        })
+                    );
+                }
+            };
+
+            structure.episodes.forEach((ep: any, epIdx: number) => {
+                // 1. Process Episode Thumbnail
+                if (ep.thumbnail) {
+                    queueUpload(ep.thumbnail, `stories/${storyId}/ep${epIdx}_thumb.png`, (url) => ep.thumbnail = url);
+                }
+
+                // 2. Process Thumbnail Variants
+                if (ep.thumbnailVariants && Array.isArray(ep.thumbnailVariants)) {
+                    ep.thumbnailVariants.forEach((variant: string, vIdx: number) => {
+                        queueUpload(variant, `stories/${storyId}/ep${epIdx}_var${vIdx}.png`, (url) => ep.thumbnailVariants[vIdx] = url);
+                    });
+                }
+
+                // 3. Process Scene Images
+                if (ep.scenes && Array.isArray(ep.scenes)) {
+                    ep.scenes.forEach((scene: any, scIdx: number) => {
+                        if (scene.generatedImage) {
+                            queueUpload(
+                                scene.generatedImage, 
+                                `stories/${storyId}/ep${epIdx}_scene${scIdx}_${uuidv4().slice(0,4)}.png`, 
+                                (url) => scene.generatedImage = url
+                            );
+                        }
+                    });
+                }
+                
+                // 4. Process Ending Image
+                if (ep.endingImage) {
+                    queueUpload(ep.endingImage, `stories/${storyId}/ep${epIdx}_ending.png`, (url) => ep.endingImage = url);
+                }
+            });
+
+            if (uploadPromises.length > 0) {
+                console.log(`[Supabase] Offloading ${uploadPromises.length} images from Story Structure...`);
+                await Promise.all(uploadPromises);
+            }
+
+            return hasChanges ? JSON.stringify(structure) : jsonContent;
+        } catch (e) {
+            console.error("Story processing error", e);
+            return jsonContent; // Fallback to original
+        }
+    }
+
+    /**
      * Upload or Update an Item in Supabase Table
+     * OPTIMIZED: Automatically offloads Base64 to Storage Bucket
      */
     public async uploadItem(item: LibraryItem): Promise<void> {
         if (!this.client) return;
 
-        // Flatten data for SQL
-        // We use snake_case for DB columns usually, but to map cleanly we'll keep simple structure
-        // Table schema expected: id (text), type (text), prompt (text), created_at (int8), meta (jsonb), base64_data (text)
-        
-        const payload = {
-            id: item.id,
-            type: item.type,
-            prompt: item.prompt,
-            created_at: item.createdAt,
-            meta: item.meta,
-            base64_data: item.base64Data, // Storing base64 directly in DB for simplicity in this implementation
-            text_content: item.textContent, // For scripts
-            video_data: item.videoData // Blob URLs can't be saved, but if it was base64 it would go here. Veo currently returns Blob URL locally.
-                                      // Note: Video Blob URLs are local-only. Syncing videos requires uploading the file blob. 
-                                      // For now, we skip video blob sync or assume text/image sync is priority.
+        // Clone item to avoid mutating local state reference
+        const payloadItem = { ...item };
+
+        // 1. Handle Single Image Items
+        let storagePath = null;
+        if (payloadItem.type !== 'story' && payloadItem.base64Data && payloadItem.base64Data.length > 500 && !payloadItem.base64Data.startsWith('http')) {
+            const fileName = `${payloadItem.id}.png`;
+            const publicUrl = await this.uploadAssetToStorage(fileName, payloadItem.base64Data);
+            if (publicUrl) {
+                payloadItem.base64Data = publicUrl; // Replace with URL
+                storagePath = fileName;
+            }
+        }
+
+        // 2. Handle Complex Story Structures (Recursive Image Offloading)
+        if (payloadItem.type === 'story' && payloadItem.textContent) {
+            payloadItem.textContent = await this.processStoryImages(payloadItem.id, payloadItem.textContent);
+        }
+
+        // Prepare payload for DB
+        const dbPayload = {
+            id: payloadItem.id,
+            type: payloadItem.type,
+            prompt: payloadItem.prompt,
+            created_at: payloadItem.createdAt,
+            meta: { ...payloadItem.meta, storagePath }, 
+            base64_data: payloadItem.base64Data, 
+            text_content: payloadItem.textContent,
         };
 
         const { error } = await this.client
             .from(TABLE_NAME)
-            .upsert(payload, { onConflict: 'id' });
+            .upsert(dbPayload, { onConflict: 'id' });
 
         if (error) {
             console.error("Supabase Upload Error:", error);
@@ -99,7 +224,8 @@ class SupabaseService {
 
         const { data, error } = await this.client
             .from(TABLE_NAME)
-            .select('*');
+            .select('*')
+            .order('created_at', { ascending: false });
 
         if (error) {
             console.error("Supabase Fetch Error:", error);
@@ -108,25 +234,29 @@ class SupabaseService {
 
         if (!data) return [];
 
-        // Map back to LibraryItem
         return data.map((row: any) => ({
             id: row.id,
             type: row.type,
             prompt: row.prompt,
             createdAt: row.created_at,
             meta: row.meta,
-            base64Data: row.base64_data,
+            base64Data: row.base64_data, 
             textContent: row.text_content
-            // videoData is skipped as it needs re-generation or separate storage
         }));
     }
 
     /**
-     * Delete an item
+     * Delete an item and its associated Storage file
      */
     public async deleteItem(id: string): Promise<void> {
         if (!this.client) return;
 
+        // 1. Try to clean up storage based on type
+        // Note: For stories, we'd theoretically need to list all files in 'stories/{id}/' and delete them.
+        // Supabase Storage doesn't support recursive delete easily without listing first.
+        // For simplicity, we delete the main record. Advanced cleanup can be a cron job.
+        
+        // 2. Delete DB Record
         const { error } = await this.client
             .from(TABLE_NAME)
             .delete()
@@ -135,7 +265,7 @@ class SupabaseService {
         if (error) {
             console.error("Supabase Delete Error:", error);
         } else {
-            console.log(`[Supabase] Deleted ${id}`);
+            console.log(`[Supabase] Deleted record ${id}`);
         }
     }
     
