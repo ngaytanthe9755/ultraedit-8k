@@ -9,6 +9,7 @@
  * - Used explicit `gapi.client.load` for Drive V3.
  * - Improved Multipart body construction.
  * - Added Smart Sync (syncRemoteToLocal).
+ * - Added Smart Debounce (performUpload with timer) to handle rapid saves safely.
  */
 
 const FOLDER_NAME = 'UltraEdit_8K_Data';
@@ -29,6 +30,9 @@ class GoogleDriveService {
     private gapiInited = false;
     private gisInited = false;
     private appFolderId: string | null = null;
+    
+    // DEBOUNCE TIMERS MAP
+    private uploadTimers: Map<string, any> = new Map();
 
     constructor() {
         this.loadConfig();
@@ -245,14 +249,33 @@ class GoogleDriveService {
     }
 
     /**
-     * Upload or Update a file (JSON or Image)
+     * Public Upload Method (Debounced)
+     * This prevents rapid overwrites/corruption when multiple saves happen quickly (e.g. generating scenes).
      */
     public async uploadItem(item: any): Promise<void> {
         if (!this.isAuthenticated()) {
             console.warn("[Drive] Not authenticated or token expired.");
             return;
         }
-        
+
+        // Clear existing timer for this item ID if it exists
+        if (this.uploadTimers.has(item.id)) {
+            clearTimeout(this.uploadTimers.get(item.id));
+        }
+
+        // Set a new timer. We wait 2 seconds for "stability" before actually uploading.
+        const timer = setTimeout(async () => {
+            this.uploadTimers.delete(item.id);
+            await this.performUpload(item);
+        }, 2000);
+
+        this.uploadTimers.set(item.id, timer);
+    }
+
+    /**
+     * Actual Upload Logic (Private)
+     */
+    private async performUpload(item: any): Promise<void> {
         const gapi = (window as any).gapi;
         
         try {
