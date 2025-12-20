@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Upload, Image as ImageIcon, ArrowLeft, LayoutGrid, Wand2, Plus } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Wand2 } from 'lucide-react';
 import { EditorWorkspace } from '../components/EditorWorkspace';
 import { CollageMaker } from '../components/CollageMaker';
 import { ImageFile } from '../types';

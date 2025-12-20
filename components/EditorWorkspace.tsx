@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { ImageFile, FilterState, DEFAULT_FILTERS } from '../types';
 import { Button } from './ui/Button';
 import { Slider } from './ui/Slider';
@@ -19,9 +20,6 @@ export const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({ image, onBack 
   const [history, setHistory] = useState<string[]>([image.url]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
-  // We use this key to force re-render of the image when filters change if needed,
-  // but CSS filters handle real-time preview efficiently.
-  
   const addToHistory = (newUrl: string) => {
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(newUrl);
